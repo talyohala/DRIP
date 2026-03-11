@@ -1,15 +1,22 @@
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Settings2, ShoppingBag, Upload, UserCircle2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
+import PowerStore, { type PowerItem } from './PowerStore';
+import ProfilePanel, { type ProfileState } from './ProfilePanel';
+import SettingsPanel, { type AppPrefs } from './SettingsPanel';
 import StakeDesk, { type AssetDeskModel } from './StakeDesk';
+import UploadPanel, { type MediaKind, type PlatformName, type UploadDraft } from './UploadPanel';
 
 type FoundingLedger = Record<string, number>;
-type MediaKind = 'image' | 'video';
+type DockPanel = 'upload' | 'store' | 'profile' | 'settings' | null;
 
 type FeedAsset = AssetDeskModel & {
   summary: string;
   mediaKind: MediaKind;
   mediaUrl: string;
+  sourceLink?: string;
+  platform: PlatformName;
   paletteA: string;
   paletteB: string;
   foundingLedger: FoundingLedger;
@@ -30,14 +37,22 @@ const PALETTES: Array<[string, string]> = [
   ['#03071E', '#CCFF00'],
 ];
 
+const powerItems: PowerItem[] = [
+  { id: 'neon-burst', name: 'פולס ניאון', price: 140, effect: 'דחיפת מחיר וצפיות' },
+  { id: 'tribe-rush', name: 'גל סינדיקט', price: 240, effect: 'תוספת השתלטויות' },
+  { id: 'market-lift', name: 'הרמת רצפה', price: 320, effect: 'חיזוק מחיר פתיחה' },
+];
+
 const seedAssets: FeedAsset[] = [
   {
     id: 'pulse-1',
-    title: 'הקרנה ניאונית: רחוב לילי',
-    creator: 'סטודיו ירח-פלזמה',
-    summary: 'סשן ויזואלי חי שהופך כל מעבר תאורה לנכס סחיר בפיד.',
+    title: 'אקו בתנועה',
+    creator: 'סטודיו ירח',
+    summary: 'פריים חי עם תאורה נוזלית',
     mediaKind: 'video',
     mediaUrl: 'https://cdn.coverr.co/videos/coverr-aerial-view-of-a-city-1579/1080p.mp4',
+    sourceLink: undefined,
+    platform: 'קישור',
     paletteA: '#4B0CA3',
     paletteB: '#FF007F',
     openingPrice: 520,
@@ -61,12 +76,14 @@ const seedAssets: FeedAsset[] = [
   },
   {
     id: 'pulse-2',
-    title: 'קצב אקווה: בתנועה רציפה',
+    title: 'גל צבע',
     creator: 'מיקה סינט',
-    summary: 'פריים דינמי עם רמיקס חי שמושך ציידי טרנדים בזמן אמת.',
+    summary: 'ויזואל חד על קצב רץ',
     mediaKind: 'image',
     mediaUrl:
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80',
+    sourceLink: undefined,
+    platform: 'קישור',
     paletteA: '#10002B',
     paletteB: '#CCFF00',
     openingPrice: 890,
@@ -90,11 +107,13 @@ const seedAssets: FeedAsset[] = [
   },
   {
     id: 'pulse-3',
-    title: 'אופק קינטי: טיפוגרפיה מרחפת',
+    title: 'אופק זוהר',
     creator: 'איילה פלו',
-    summary: 'אסתטיקה הולוגרפית שמגיבה לצפייה משותפת ומאיצה את המחיר.',
+    summary: 'טיפוגרפיה קינטית בלופ',
     mediaKind: 'video',
     mediaUrl: 'https://cdn.coverr.co/videos/coverr-fashion-model-in-neon-light-9710/1080p.mp4',
+    sourceLink: undefined,
+    platform: 'קישור',
     paletteA: '#010114',
     paletteB: '#E0E0E0',
     openingPrice: 1330,
@@ -131,7 +150,6 @@ const normalizeAsset = (asset: FeedAsset): FeedAsset => {
   const opening = Math.max(1, asset.openingPrice);
   const ageMinutes = Math.max(1, (Date.now() - asset.createdAt) / 60000);
   const safeAvgClaim = asset.totalClaims > 0 ? asset.averageClaimPrice : opening;
-
   const momentumNorm = clamp((asset.stakePrice - opening) / (opening * 2.2), 0, 1);
   const takeoverNorm = clamp(asset.totalClaims / 28, 0, 1);
   const claimPremiumNorm = clamp((safeAvgClaim - opening) / (opening * 1.6), 0, 1);
@@ -165,13 +183,32 @@ const getBackCost = (asset: FeedAsset): number =>
   BASE_BACK_COST + Math.floor(asset.hypeLevel * 15) + Math.floor(asset.transferVelocity / 24);
 
 const createAssetId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return `pulse-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 };
 
 const pickPalette = (): [string, string] => PALETTES[Math.floor(Math.random() * PALETTES.length)];
+
+const DockButton = ({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`holo-panel flex items-center gap-2 rounded-2xl px-3 py-2 text-xs ${active ? 'text-[#CCFF00]' : 'text-white/85'}`}
+  >
+    {children}
+    <span>{label}</span>
+  </button>
+);
 
 export default function AetherFeed() {
   const [assets, setAssets] = useState<FeedAsset[]>(() => seedAssets.map((asset) => normalizeAsset(asset)));
@@ -179,15 +216,35 @@ export default function AetherFeed() {
   const [wallet, setWallet] = useState(4800);
   const [lifetimeDividends, setLifetimeDividends] = useState(0);
   const [shockwaveAirdrops, setShockwaveAirdrops] = useState(0);
-  const [eventLine, setEventLine] = useState('השוק חי: גללו למעלה ולמטה כדי להעביר את ההייפ בין הנכסים.');
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [draftTitle, setDraftTitle] = useState('');
-  const [draftCreator, setDraftCreator] = useState('');
-  const [draftSummary, setDraftSummary] = useState('');
-  const [draftMediaKind, setDraftMediaKind] = useState<MediaKind>('video');
-  const [draftMediaUrl, setDraftMediaUrl] = useState('');
-  const [draftOpeningPrice, setDraftOpeningPrice] = useState('500');
+  const [myClaims, setMyClaims] = useState(0);
+  const [myBacks, setMyBacks] = useState(0);
+  const [eventLine, setEventLine] = useState('גללו. תבעו. הגבּו.');
+  const [deskCollapsed, setDeskCollapsed] = useState(true);
+  const [panelOpen, setPanelOpen] = useState<DockPanel>(null);
+  const [profile, setProfile] = useState<ProfileState>({
+    displayName: 'משתמש/ת חדש/ה',
+    house: 'בית חופשי',
+    tagline: 'על הטרנד הבא',
+  });
+  const [prefs, setPrefs] = useState<AppPrefs>({
+    autoPlay: true,
+    compactDesk: true,
+    lowMotion: false,
+  });
+
+  const objectUrlsRef = useRef<string[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      objectUrlsRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    if (prefs.compactDesk) setDeskCollapsed(true);
+  }, [prefs.compactDesk]);
 
   useEffect(() => {
     const root = scrollRef.current;
@@ -203,10 +260,7 @@ export default function AetherFeed() {
         const nextIndex = Number(topEntry.target.getAttribute('data-index'));
         if (!Number.isNaN(nextIndex)) setActiveIndex(nextIndex);
       },
-      {
-        root,
-        threshold: [0.55, 0.68, 0.82],
-      },
+      { root, threshold: [0.55, 0.68, 0.82] },
     );
 
     cards.forEach((card) => observer.observe(card));
@@ -216,12 +270,9 @@ export default function AetherFeed() {
   useEffect(() => {
     setAssets((prevAssets) =>
       prevAssets.map((asset, idx) => {
-        const migration = idx === activeIndex ? 210 : -55;
+        const migration = idx === activeIndex ? 220 : -58;
         const viewersLive = clamp(asset.viewersLive + migration, 220, 60000);
-        return normalizeAsset({
-          ...asset,
-          viewersLive,
-        });
+        return normalizeAsset({ ...asset, viewersLive });
       }),
     );
   }, [activeIndex]);
@@ -232,13 +283,14 @@ export default function AetherFeed() {
       setAssets((prevAssets) =>
         prevAssets.map((asset, idx) => {
           const isActive = idx === activeIndex;
-          const viewerSwing = Math.round((Math.random() - 0.45) * (isActive ? 400 : 260));
+          const swingFactor = prefs.lowMotion ? 0.45 : 1;
+          const viewerSwing = Math.round((Math.random() - 0.45) * (isActive ? 360 : 220) * swingFactor);
           const viewersLive = clamp(asset.viewersLive + viewerSwing, 180, 60000);
-          const shareBoost = Math.max(0, Math.round(viewersLive / (isActive ? 160 : 260)) + Math.round(Math.random() * 12));
-          const watchMinutes = asset.watchMinutes + Math.round(viewersLive / (isActive ? 80 : 120));
+          const shareBoost = Math.max(0, Math.round(viewersLive / (isActive ? 170 : 260)) + Math.round(Math.random() * 8));
+          const watchMinutes = asset.watchMinutes + Math.round(viewersLive / (isActive ? 90 : 130));
 
           let stakePrice = clamp(
-            Math.round(asset.stakePrice * (1 + (asset.hypeLevel - 0.46) * 0.007 + (isActive ? 0.0025 : 0.001))),
+            Math.round(asset.stakePrice * (1 + (asset.hypeLevel - 0.46) * 0.007 + (isActive ? 0.0022 : 0.0009))),
             60,
             500000,
           );
@@ -248,18 +300,16 @@ export default function AetherFeed() {
           let currentOwner = asset.currentOwner;
           let shareCount = asset.shareCount + shareBoost;
 
-          const autoClaimChance = (isActive ? 0.2 : 0.09) + asset.hypeLevel * 0.08;
+          const autoClaimChance = (isActive ? 0.16 : 0.06) + asset.hypeLevel * 0.07;
           if (Math.random() < autoClaimChance) {
-            const autoClaimPrice = Math.round(stakePrice * (1.03 + Math.random() * 0.1 + asset.hypeLevel * 0.06));
+            const autoClaimPrice = Math.round(stakePrice * (1.02 + Math.random() * 0.1 + asset.hypeLevel * 0.05));
             totalClaims += 1;
             claimVolume += autoClaimPrice;
             averageClaimPrice = claimVolume / totalClaims;
-            stakePrice = clamp(Math.round(autoClaimPrice * (1.03 + Math.random() * 0.08)), 60, 500000);
+            stakePrice = clamp(Math.round(autoClaimPrice * (1.03 + Math.random() * 0.07)), 60, 500000);
             currentOwner = `סינדיקט ${1 + Math.floor(Math.random() * 7)}`;
-            shareCount += Math.round(16 + Math.random() * 48);
-            if (isActive) {
-              liveHeadline = `השתלטות חיה: ${currentOwner} נכנס ב-${formatCoin(autoClaimPrice)} DRIPCOIN`;
-            }
+            shareCount += Math.round(10 + Math.random() * 36);
+            if (isActive) liveHeadline = `השתלטות ${formatCoin(autoClaimPrice)} DRIPCOIN`;
           }
 
           return normalizeAsset({
@@ -275,13 +325,11 @@ export default function AetherFeed() {
           });
         }),
       );
-      if (liveHeadline) {
-        setEventLine(liveHeadline);
-      }
-    }, 2400);
+      if (liveHeadline) setEventLine(liveHeadline);
+    }, prefs.lowMotion ? 3200 : 2400);
 
     return () => window.clearInterval(interval);
-  }, [activeIndex]);
+  }, [activeIndex, prefs.lowMotion]);
 
   const activeAsset = assets[activeIndex] ?? assets[0];
   const activeLedgerTotal = activeAsset ? sumLedger(activeAsset.foundingLedger) : 0;
@@ -291,7 +339,6 @@ export default function AetherFeed() {
     if (!activeAsset || myFoundingStake <= 0 || activeLedgerTotal <= 0) return 0;
     return Math.round(activeAsset.stakePrice * DIVIDEND_RATE * (myFoundingStake / activeLedgerTotal));
   }, [activeAsset, myFoundingStake, activeLedgerTotal]);
-
   const canBack = wallet >= backCost;
   const canClaim = wallet >= (activeAsset?.stakePrice ?? Number.MAX_SAFE_INTEGER);
 
@@ -305,39 +352,36 @@ export default function AetherFeed() {
     root.style.setProperty('--my', `${clamp(y, 0, 100)}%`);
   };
 
-  const submitNewAsset = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const openingPrice = Math.round(Number(draftOpeningPrice));
-    if (!draftTitle.trim() || !draftCreator.trim() || !draftSummary.trim() || !draftMediaUrl.trim()) {
-      toast.error('יש למלא את כל השדות לפני הנפקה.');
-      return;
-    }
-    if (!Number.isFinite(openingPrice) || openingPrice <= 0) {
-      toast.error('מחיר פתיחה חייב להיות מספר חיובי.');
-      return;
-    }
+  const createObjectUrl = (file: File): string => {
+    const url = URL.createObjectURL(file);
+    objectUrlsRef.current.push(url);
+    return url;
+  };
 
+  const onUploadSubmit = (draft: UploadDraft) => {
     const [paletteA, paletteB] = pickPalette();
     const created = normalizeAsset({
       id: createAssetId(),
-      title: draftTitle.trim(),
-      creator: draftCreator.trim(),
-      summary: draftSummary.trim(),
-      mediaKind: draftMediaKind,
-      mediaUrl: draftMediaUrl.trim(),
+      title: draft.title,
+      creator: draft.creator,
+      summary: draft.summary,
+      mediaKind: draft.mediaKind,
+      mediaUrl: draft.mediaUrl,
+      sourceLink: draft.sourceLink,
+      platform: draft.platform,
       paletteA,
       paletteB,
-      openingPrice,
-      stakePrice: openingPrice,
-      viewersLive: 240 + Math.round(Math.random() * 500),
-      hypeLevel: 0.12,
+      openingPrice: draft.openingPrice,
+      stakePrice: draft.openingPrice,
+      viewersLive: 220 + Math.round(Math.random() * 450),
+      hypeLevel: 0.11,
       foundingPool: 0,
       foundingBackers: 0,
       totalClaims: 0,
-      averageClaimPrice: openingPrice,
-      viralScore: 8,
+      averageClaimPrice: draft.openingPrice,
+      viralScore: 6,
       transferVelocity: 0,
-      marketingScore: 10,
+      marketingScore: 9,
       currentOwner: 'היוצר המקורי',
       trendScore: 1,
       foundingLedger: {},
@@ -349,15 +393,9 @@ export default function AetherFeed() {
 
     setAssets((prev) => [created, ...prev]);
     setActiveIndex(0);
-    setComposerOpen(false);
-    setDraftTitle('');
-    setDraftCreator('');
-    setDraftSummary('');
-    setDraftMediaUrl('');
-    setDraftMediaKind('video');
-    setDraftOpeningPrice('500');
-    setEventLine(`נכס חדש הונפק במחיר פתיחה ${formatCoin(openingPrice)} DRIPCOIN. הקרב מתחיל עכשיו.`);
-    toast.success('הנפקה בוצעה. הנכס נכנס לראש הפיד.');
+    setPanelOpen(null);
+    setEventLine(`הנפקה ${formatCoin(draft.openingPrice)} DRIPCOIN`);
+    toast.success('נכס חדש בפיד');
     scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -366,11 +404,12 @@ export default function AetherFeed() {
     if (!asset) return;
     const actionCost = getBackCost(asset);
     if (wallet < actionCost) {
-      toast.error('אין מספיק DRIPCOIN לפעולת גבה.');
+      toast.error('אין מספיק DRIPCOIN');
       return;
     }
 
     setWallet((prev) => prev - actionCost);
+    setMyBacks((prev) => prev + 1);
     setAssets((prevAssets) =>
       prevAssets.map((item, idx) => {
         if (idx !== activeIndex) return item;
@@ -393,18 +432,15 @@ export default function AetherFeed() {
         });
       }),
     );
-
-    setEventLine(`בוצע גבה מוקדם: ${formatCoin(actionCost)} DRIPCOIN הוזרמו לבריכת המייסדים.`);
-    toast.success(`ננעל גבה מוקדם ב-${formatCoin(actionCost)} DRIPCOIN`);
+    setEventLine(`גבה ${formatCoin(actionCost)} DRIPCOIN`);
   };
 
   const onClaim = () => {
     const asset = assets[activeIndex];
     if (!asset) return;
-
     const claimPrice = Math.round(asset.stakePrice);
     if (wallet < claimPrice) {
-      toast.error('אין מספיק DRIPCOIN לפעולת תבע.');
+      toast.error('אין מספיק DRIPCOIN');
       return;
     }
 
@@ -417,6 +453,7 @@ export default function AetherFeed() {
     setWallet((prev) => prev - claimPrice + myDividend + shockwave);
     setLifetimeDividends((prev) => prev + myDividend);
     setShockwaveAirdrops((prev) => prev + shockwave);
+    setMyClaims((prev) => prev + 1);
     setAssets((prevAssets) =>
       prevAssets.map((item, idx) => {
         if (idx !== activeIndex) return item;
@@ -426,7 +463,6 @@ export default function AetherFeed() {
         const totalClaims = item.totalClaims + 1;
         const claimVolume = item.claimVolume + claimPrice;
         const averageClaimPrice = claimVolume / totalClaims;
-
         return normalizeAsset({
           ...item,
           stakePrice,
@@ -434,7 +470,7 @@ export default function AetherFeed() {
           totalClaims,
           claimVolume,
           averageClaimPrice,
-          currentOwner: 'את/ה',
+          currentOwner: profile.displayName,
           shareCount: item.shareCount + Math.round(24 + Math.random() * 90),
           watchMinutes: item.watchMinutes + Math.round(item.viewersLive / 60),
           foundingPool: 0,
@@ -444,10 +480,60 @@ export default function AetherFeed() {
       }),
     );
 
-    setEventLine(
-      `תבע הושלם: דיבידנד אישי ${formatCoin(myDividend)} DRIPCOIN + גל הדף ${formatCoin(shockwave)} DRIPCOIN.`,
+    setEventLine(`תבע ${formatCoin(claimPrice)} · החזר ${formatCoin(myDividend + shockwave)}`);
+  };
+
+  const onBuyPower = (powerId: string) => {
+    const asset = assets[activeIndex];
+    const power = powerItems.find((item) => item.id === powerId);
+    if (!asset || !power) return;
+    if (wallet < power.price) {
+      toast.error('יתרה נמוכה');
+      return;
+    }
+
+    setWallet((prev) => prev - power.price);
+    setAssets((prevAssets) =>
+      prevAssets.map((item, idx) => {
+        if (idx !== activeIndex) return item;
+
+        if (powerId === 'neon-burst') {
+          return normalizeAsset({
+            ...item,
+            stakePrice: Math.round(item.stakePrice * 1.08),
+            viewersLive: clamp(item.viewersLive + 650, 180, 60000),
+            shareCount: item.shareCount + 120,
+            watchMinutes: item.watchMinutes + 440,
+          });
+        }
+
+        if (powerId === 'tribe-rush') {
+          const boostClaims = 2;
+          const claimVolume = item.claimVolume + item.stakePrice * boostClaims;
+          const totalClaims = item.totalClaims + boostClaims;
+          return normalizeAsset({
+            ...item,
+            totalClaims,
+            claimVolume,
+            averageClaimPrice: claimVolume / totalClaims,
+            viewersLive: clamp(item.viewersLive + 520, 180, 60000),
+            shareCount: item.shareCount + 80,
+            currentOwner: profile.house || profile.displayName,
+          });
+        }
+
+        return normalizeAsset({
+          ...item,
+          openingPrice: Math.round(Math.max(item.openingPrice, item.stakePrice * 0.92)),
+          stakePrice: Math.round(item.stakePrice * 1.05),
+          watchMinutes: item.watchMinutes + 280,
+          shareCount: item.shareCount + 60,
+        });
+      }),
     );
-    toast.success(`תבע בוצע. התקבלו ${formatCoin(myDividend + shockwave)} DRIPCOIN בחזרה.`);
+
+    setEventLine(`כוח הופעל ${power.name}`);
+    setPanelOpen(null);
   };
 
   return (
@@ -459,125 +545,99 @@ export default function AetherFeed() {
         if (touch) updateShimmer(touch.clientX, touch.clientY);
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 p-4 md:p-6">
-        <div className="pointer-events-auto mx-auto w-full max-w-4xl">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="holo-panel rounded-2xl px-3 py-2 text-xs text-[#E0E0E0]/90">
-              גלילה למעלה/למטה מזיזה את מוקד ההייפ לנכס הבא
-            </div>
-            <button
-              type="button"
-              onClick={() => setComposerOpen((prev) => !prev)}
-              className="rounded-2xl border border-[#CCFF00]/40 bg-[#CCFF00]/15 px-3 py-2 text-xs font-semibold text-[#DFFF8A]"
-            >
-              {composerOpen ? 'סגור הנפקה' : 'הנפקת נכס חדש'}
-            </button>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 p-3">
+        <div className="pointer-events-auto mx-auto flex max-w-4xl items-center justify-between gap-2">
+          <div className="holo-panel rounded-2xl px-3 py-1.5 text-xs text-white/85">
+            {profile.displayName} · {formatCoin(wallet)} DRIPCOIN
           </div>
-
-          {composerOpen && (
-            <form onSubmit={submitNewAsset} className="holo-panel rounded-3xl p-3 md:p-4">
-              <p className="mb-3 text-sm font-semibold text-white">יצירת נכס חדש לפיד החי</p>
-              <div className="grid gap-2 md:grid-cols-2">
-                <input
-                  value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none placeholder:text-[#E0E0E0]/45"
-                  placeholder="שם הנכס"
-                />
-                <input
-                  value={draftCreator}
-                  onChange={(event) => setDraftCreator(event.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none placeholder:text-[#E0E0E0]/45"
-                  placeholder="שם היוצר"
-                />
-                <input
-                  value={draftMediaUrl}
-                  onChange={(event) => setDraftMediaUrl(event.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none placeholder:text-[#E0E0E0]/45 md:col-span-2"
-                  placeholder="קישור ישיר לתמונה או וידאו"
-                />
-                <textarea
-                  value={draftSummary}
-                  onChange={(event) => setDraftSummary(event.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none placeholder:text-[#E0E0E0]/45 md:col-span-2"
-                  placeholder="תיאור קצר ומושך לנכס"
-                  rows={2}
-                />
-                <select
-                  value={draftMediaKind}
-                  onChange={(event) => setDraftMediaKind(event.target.value as MediaKind)}
-                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none"
-                >
-                  <option value="video">וידאו</option>
-                  <option value="image">תמונה</option>
-                </select>
-                <input
-                  value={draftOpeningPrice}
-                  onChange={(event) => setDraftOpeningPrice(event.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none placeholder:text-[#E0E0E0]/45"
-                  placeholder="מחיר פתיחה ב-DRIPCOIN"
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="submit"
-                  className="rounded-2xl border border-[#FF007F]/40 bg-[#FF007F]/20 px-4 py-2 text-sm font-semibold text-[#FFD3EA]"
-                >
-                  העלאה לפיד והנפקה חיה
-                </button>
-              </div>
-            </form>
-          )}
+          <div className="holo-panel rounded-2xl px-3 py-1.5 text-xs text-white/80">{eventLine}</div>
         </div>
       </div>
 
+      <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
+        <div className="pointer-events-auto flex flex-col gap-2">
+          <DockButton label="העלאה" active={panelOpen === 'upload'} onClick={() => setPanelOpen(panelOpen === 'upload' ? null : 'upload')}>
+            <Upload size={14} />
+          </DockButton>
+          <DockButton label="חנות" active={panelOpen === 'store'} onClick={() => setPanelOpen(panelOpen === 'store' ? null : 'store')}>
+            <ShoppingBag size={14} />
+          </DockButton>
+          <DockButton label="פרופיל" active={panelOpen === 'profile'} onClick={() => setPanelOpen(panelOpen === 'profile' ? null : 'profile')}>
+            <UserCircle2 size={14} />
+          </DockButton>
+          <DockButton label="הגדרות" active={panelOpen === 'settings'} onClick={() => setPanelOpen(panelOpen === 'settings' ? null : 'settings')}>
+            <Settings2 size={14} />
+          </DockButton>
+        </div>
+      </div>
+
+      <UploadPanel open={panelOpen === 'upload'} onClose={() => setPanelOpen(null)} onSubmit={onUploadSubmit} onCreateObjectUrl={createObjectUrl} />
+      <PowerStore open={panelOpen === 'store'} wallet={wallet} powers={powerItems} onBuy={onBuyPower} onClose={() => setPanelOpen(null)} />
+      <ProfilePanel
+        open={panelOpen === 'profile'}
+        wallet={wallet}
+        assetsOwned={myBacks}
+        claims={myClaims}
+        profile={profile}
+        onChange={setProfile}
+        onClose={() => setPanelOpen(null)}
+      />
+      <SettingsPanel
+        open={panelOpen === 'settings'}
+        prefs={prefs}
+        onToggle={(key) => setPrefs((prev) => ({ ...prev, [key]: !prev[key] }))}
+        onClose={() => setPanelOpen(null)}
+      />
+
       <div ref={scrollRef} className="aether-scroll">
         {assets.map((asset, index) => (
-          <article
-            key={asset.id}
-            data-feed-card
-            data-index={index}
-            className="aether-snap relative h-[100dvh] w-full"
-          >
+          <article key={asset.id} data-feed-card data-index={index} className="aether-snap relative h-[100dvh] w-full">
             <div className="absolute inset-0">
-              {asset.mediaKind === 'video' ? (
+              {asset.mediaKind === 'video' && (
                 <video
                   className="h-full w-full object-cover"
                   src={asset.mediaUrl}
                   muted
                   loop
                   playsInline
-                  autoPlay={activeIndex === index}
+                  autoPlay={prefs.autoPlay && activeIndex === index}
                   preload="metadata"
                 />
-              ) : (
-                <img src={asset.mediaUrl} alt={asset.title} className="h-full w-full object-cover" />
+              )}
+              {asset.mediaKind === 'image' && <img src={asset.mediaUrl} alt={asset.title} className="h-full w-full object-cover" />}
+              {asset.mediaKind === 'embed' && (
+                <iframe
+                  title={`${asset.platform}-${asset.id}`}
+                  className="h-full w-full border-0"
+                  src={asset.mediaUrl}
+                  allow="autoplay; encrypted-media; clipboard-write"
+                />
               )}
             </div>
+
             <div
               className="pointer-events-none absolute inset-0 opacity-85"
               style={{
-                background: `linear-gradient(180deg, rgba(1,1,20,0.35) 0%, rgba(1,1,20,0.08) 28%, rgba(1,1,20,0.75) 100%), radial-gradient(circle at ${index % 2 === 0 ? '18%' : '78%'} 26%, ${asset.paletteB}4D, transparent 48%), radial-gradient(circle at ${index % 2 === 0 ? '82%' : '12%'} 78%, ${asset.paletteA}70, transparent 56%)`,
+                background: `linear-gradient(180deg, rgba(1,1,20,0.26) 0%, rgba(1,1,20,0.06) 28%, rgba(1,1,20,0.76) 100%), radial-gradient(circle at ${index % 2 === 0 ? '18%' : '78%'} 26%, ${asset.paletteB}4D, transparent 48%), radial-gradient(circle at ${index % 2 === 0 ? '82%' : '12%'} 78%, ${asset.paletteA}70, transparent 56%)`,
               }}
             />
 
             <motion.div
               className="relative z-10 flex h-full w-full flex-col justify-between p-4 md:p-8"
-              initial={{ opacity: 0.7, scale: 0.995 }}
-              animate={{ opacity: activeIndex === index ? 1 : 0.82, scale: activeIndex === index ? 1 : 0.996 }}
+              initial={{ opacity: 0.75, scale: 0.995 }}
+              animate={{ opacity: activeIndex === index ? 1 : 0.84, scale: activeIndex === index ? 1 : 0.996 }}
               transition={{ type: 'spring', stiffness: 120, damping: 21, mass: 0.9 }}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="holo-panel rounded-2xl px-3 py-2 text-xs text-[#E0E0E0]/90">
-                  נכס חי #{index + 1} · בעלים: {asset.currentOwner}
+                  #{index + 1} · {asset.currentOwner}
                 </div>
                 <div className="holo-panel rounded-2xl px-3 py-2 text-xs text-[#E0E0E0]">
-                  הייפ {Math.round(asset.hypeLevel * 100)}% · מגמה {asset.trendScore}
+                  הייפ {Math.round(asset.hypeLevel * 100)}% · {asset.platform}
                 </div>
               </div>
 
-              <div className="mx-auto mb-44 w-full max-w-5xl">
+              <div className="mx-auto mb-40 w-full max-w-5xl">
                 <div className="holo-panel w-fit rounded-3xl p-4 md:p-5">
                   <h1
                     className="kinetic-text text-2xl font-semibold text-white md:text-5xl"
@@ -585,25 +645,18 @@ export default function AetherFeed() {
                   >
                     {asset.title}
                   </h1>
-                  <p className="mt-2 max-w-2xl text-sm text-[#E0E0E0]/80 md:text-base">{asset.summary}</p>
-                  <p className="mt-2 text-xs text-[#E0E0E0]/65">יוצר: {asset.creator}</p>
-                </div>
-
-                <div className="mt-3 grid max-w-xl grid-cols-3 gap-2 text-xs">
-                  <div className="holo-panel rounded-2xl p-2">
-                    <p className="text-[#E0E0E0]/55">צופים</p>
-                    <p className="biolume-number mt-1 text-sm font-semibold">{formatCoin(asset.viewersLive)}</p>
-                  </div>
-                  <div className="holo-panel rounded-2xl p-2">
-                    <p className="text-[#E0E0E0]/55">השתלטויות</p>
-                    <p className="biolume-number mt-1 text-sm font-semibold">{asset.totalClaims}</p>
-                  </div>
-                  <div className="holo-panel rounded-2xl p-2">
-                    <p className="text-[#E0E0E0]/55">מחיר</p>
-                    <p className="biolume-number mt-1 text-sm font-semibold text-[#FF007F]">
-                      {formatCoin(asset.stakePrice)} DRIPCOIN
-                    </p>
-                  </div>
+                  <p className="mt-2 text-sm text-[#E0E0E0]/80 md:text-base">{asset.summary}</p>
+                  <p className="mt-1 text-xs text-[#E0E0E0]/65">{asset.creator}</p>
+                  {asset.sourceLink && (
+                    <a
+                      href={asset.sourceLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block rounded-xl border border-white/20 px-2 py-1 text-[11px] text-white/85"
+                    >
+                      מקור
+                    </a>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -612,7 +665,7 @@ export default function AetherFeed() {
       </div>
 
       {activeAsset && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4 pb-5 md:p-8">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-3 pb-4 md:p-6">
           <StakeDesk
             asset={activeAsset}
             wallet={wallet}
@@ -623,14 +676,13 @@ export default function AetherFeed() {
             backCost={backCost}
             canBack={canBack}
             canClaim={canClaim}
+            collapsed={deskCollapsed}
+            onToggleCollapse={() => setDeskCollapsed((prev) => !prev)}
           />
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-[#E0E0E0]/80 backdrop-blur-xl">
-            <p>{eventLine}</p>
-            <p className="biolume-number">
-              דיבידנדים מצטברים: {formatCoin(lifetimeDividends)} DRIPCOIN | אייר-דרופ מצטבר:{' '}
-              {formatCoin(shockwaveAirdrops)} DRIPCOIN
-            </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-[#E0E0E0]/80 backdrop-blur-xl">
+            <p>דיבידנד {formatCoin(lifetimeDividends)} DRIPCOIN</p>
+            <p>אייר-דרופ {formatCoin(shockwaveAirdrops)} DRIPCOIN</p>
           </div>
         </div>
       )}

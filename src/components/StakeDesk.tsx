@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { CSSProperties } from 'react';
 
 export type AssetDeskModel = {
@@ -30,6 +31,8 @@ type StakeDeskProps = {
   backCost: number;
   canBack: boolean;
   canClaim: boolean;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 };
 
 const formatCoin = (value: number): string =>
@@ -47,6 +50,8 @@ export default function StakeDesk({
   backCost,
   canBack,
   canClaim,
+  collapsed,
+  onToggleCollapse,
 }: StakeDeskProps) {
   const dynamicWeight = 500 + Math.round(asset.hypeLevel * 350);
   const hypeState =
@@ -65,58 +70,85 @@ export default function StakeDesk({
         } as CSSProperties
       }
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="kinetic-text text-lg font-semibold leading-tight text-white">{asset.title}</p>
-          <p className="mt-1 text-xs text-[#E0E0E0]/70">יוצר: {asset.creator}</p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="rounded-xl border border-white/15 bg-black/20 p-1.5 text-[#E0E0E0]"
+            aria-label={collapsed ? 'פתח לוח נתונים' : 'כווץ לוח נתונים'}
+          >
+            {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          <p className="kinetic-text text-base font-semibold leading-tight text-white">{asset.title}</p>
         </div>
-        <div className="rounded-full border border-white/15 px-3 py-1 text-xs text-[#CCFF00]">
-          מדד הייפ {Math.round(asset.hypeLevel * 100)}% · {hypeState}
+        <div className="rounded-full border border-white/15 px-2 py-1 text-[11px] text-[#CCFF00]">
+          הייפ {Math.round(asset.hypeLevel * 100)}%
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
+      <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
-          <p className="text-[#E0E0E0]/55">מחיר החזקה</p>
+          <p className="text-[#E0E0E0]/55">מחיר</p>
           <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">
             {formatCoin(asset.stakePrice)} DRIPCOIN
           </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
-          <p className="text-[#E0E0E0]/55">מחיר פתיחה</p>
-          <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">
-            {formatCoin(asset.openingPrice)} DRIPCOIN
-          </p>
+          <p className="text-[#E0E0E0]/55">צופים</p>
+          <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">{formatCoin(asset.viewersLive)}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
           <p className="text-[#E0E0E0]/55">יתרה</p>
-          <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">{formatCoin(wallet)} DRIPCOIN</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
-          <p className="text-[#E0E0E0]/55">בריכת דיבידנד</p>
           <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">
-            {formatCoin(asset.foundingPool)} DRIPCOIN
-          </p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
-          <p className="text-[#E0E0E0]/55">צופים חיים</p>
-          <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">
-            {formatCoin(asset.viewersLive)}
+            {formatCoin(wallet)} DRIPCOIN
           </p>
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-[#E0E0E0]/75 md:grid-cols-4">
-        <p>תרומה מייסדת שלך: {formatCoin(myFoundingStake)} DRIPCOIN</p>
-        <p>דיבידנד חזוי: {formatCoin(myProjectedDividend)} DRIPCOIN</p>
-        <p>משקיעים מייסדים: {asset.foundingBackers}</p>
-        <p>עלות גבה: {formatCoin(backCost)} DRIPCOIN</p>
-        <p>השתלטויות מצטברות: {asset.totalClaims}</p>
-        <p>מחיר השתלטות ממוצע: {formatCoin(asset.averageClaimPrice)} DRIPCOIN</p>
-        <p>וויראליות: {asset.viralScore}% · מהירות מעבר: {asset.transferVelocity}%</p>
-        <p>שיווקיות: {asset.marketingScore}% · מגמה: {asset.trendScore} · שינוי: {growthPercent}%</p>
-        <p className="md:col-span-2">בעלים נוכחי: {asset.currentOwner}</p>
-      </div>
+      {!collapsed && (
+        <>
+          <div className="mb-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+              <p className="text-[#E0E0E0]/55">מחיר פתיחה</p>
+              <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">
+                {formatCoin(asset.openingPrice)} DRIPCOIN
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+              <p className="text-[#E0E0E0]/55">בריכה</p>
+              <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">
+                {formatCoin(asset.foundingPool)} DRIPCOIN
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+              <p className="text-[#E0E0E0]/55">השתלטויות</p>
+              <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">{asset.totalClaims}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+              <p className="text-[#E0E0E0]/55">ממוצע</p>
+              <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">
+                {formatCoin(asset.averageClaimPrice)} DRIPCOIN
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+              <p className="text-[#E0E0E0]/55">שינוי</p>
+              <p className="biolume-number mt-1 text-sm font-semibold text-[#E0E0E0]">{growthPercent}%</p>
+            </div>
+          </div>
+
+          <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-[#E0E0E0]/75 md:grid-cols-4">
+            <p>בעלים {asset.currentOwner}</p>
+            <p>מצב {hypeState}</p>
+            <p>ויראליות {asset.viralScore}%</p>
+            <p>מהירות {asset.transferVelocity}%</p>
+            <p>שיווקיות {asset.marketingScore}%</p>
+            <p>תרומה {formatCoin(myFoundingStake)} DRIPCOIN</p>
+            <p>דיבידנד {formatCoin(myProjectedDividend)} DRIPCOIN</p>
+            <p>עלות גבה {formatCoin(backCost)} DRIPCOIN</p>
+          </div>
+        </>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <motion.button
@@ -127,7 +159,7 @@ export default function StakeDesk({
           transition={{ type: 'spring', stiffness: 300, damping: 18 }}
           className="rounded-2xl border border-[#FF007F]/40 bg-[#FF007F]/20 px-4 py-3 text-sm font-semibold text-[#FFD3EA] disabled:cursor-not-allowed disabled:opacity-45"
         >
-          גבה (Back)
+          גבה
         </motion.button>
         <motion.button
           type="button"
@@ -137,7 +169,7 @@ export default function StakeDesk({
           transition={{ type: 'spring', stiffness: 300, damping: 18 }}
           className="rounded-2xl border border-[#CCFF00]/45 bg-[#CCFF00]/18 px-4 py-3 text-sm font-semibold text-[#E8FF9A] disabled:cursor-not-allowed disabled:opacity-45"
         >
-          תבע (Claim)
+          תבע
         </motion.button>
       </div>
     </motion.section>
