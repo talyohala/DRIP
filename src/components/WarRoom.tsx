@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Activity, Flame, ShieldAlert } from 'lucide-react';
+import { Activity, Flame, ShieldAlert, ShoppingBag, UserRound } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { DripCoinBadge } from './DripCoinBadge';
@@ -53,10 +53,32 @@ export default function WarRoom() {
   }, [leaders]);
 
   return (
-    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-32 pt-5">
+    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-20 pt-5">
       <div className="mx-auto w-full max-w-xl space-y-4 px-4">
         <header className="glass-panel rounded-[2rem] p-4">
-          <h1 className="text-2xl font-black text-white">לוח עוצמה חי</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-black text-white">לוח עוצמה חי</h1>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  window.location.hash = 'market';
+                }}
+                className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.03] text-white/70"
+                title="מעבר למרקט"
+              >
+                <ShoppingBag size={16} />
+              </button>
+              <button
+                onClick={() => {
+                  window.location.hash = 'profile';
+                }}
+                className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.03] text-white/70"
+                title="מעבר לכספת"
+              >
+                <UserRound size={16} />
+              </button>
+            </div>
+          </div>
           <p className="mt-2 text-xs text-white/58">דירוג דינמי שמתעדכן כל שינוי מאזן בזמן אמת.</p>
           <div className="mt-3 flex items-center justify-between">
             <DripCoinBadge amount={(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')} />
@@ -74,15 +96,11 @@ export default function WarRoom() {
             const isLeader = rank === 1;
             const isDanger = rank > 1 && (leaders[0]?.drip_coins ?? 0) - (user.drip_coins ?? 0) < 1000;
             return (
-              <motion.button
+              <motion.div
                 key={user.id}
-                type="button"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.02 }}
-                onClick={() => {
-                  window.location.hash = `user_${user.id}`;
-                }}
                 className={`flex w-full items-center gap-3 rounded-[1.2rem] border p-3 text-right backdrop-blur-3xl transition ${
                   isMe
                     ? 'border-[#0A84FF]/45 bg-[#0A84FF]/10'
@@ -115,7 +133,7 @@ export default function WarRoom() {
                 <div className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2 py-1 text-[11px] font-semibold text-white">
                   <DripCoinBadge amount={(user.drip_coins ?? 0).toLocaleString('he-IL')} className="py-0.5" />
                 </div>
-              </motion.button>
+              </motion.div>
             );
           })}
         </div>
