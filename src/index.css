@@ -5,7 +5,7 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  background: #010102;
+  background: #02030a;
 }
 
 * {
@@ -17,8 +17,8 @@ body,
 #root {
   margin: 0;
   width: 100%;
-  min-height: 100%;
-  background: #000;
+  height: 100%;
+  background: linear-gradient(180deg, #02030a 0%, #04050f 45%, #02030a 100%);
   color: #f8fafc;
 }
 
@@ -30,14 +30,14 @@ body {
 body::before {
   content: '';
   position: fixed;
-  inset: -28%;
+  inset: -30%;
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 22% 24%, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.02) 24%, transparent 42%),
-    radial-gradient(circle at 78% 16%, rgba(34, 211, 238, 0.14) 0%, rgba(34, 211, 238, 0.02) 24%, transparent 42%),
-    radial-gradient(circle at 50% 92%, rgba(244, 63, 94, 0.12) 0%, rgba(244, 63, 94, 0.01) 28%, transparent 48%);
-  filter: blur(28px);
+    radial-gradient(circle at 22% 24%, rgba(217, 70, 239, 0.17) 0%, rgba(217, 70, 239, 0.03) 24%, transparent 42%),
+    radial-gradient(circle at 78% 16%, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0.03) 24%, transparent 42%),
+    radial-gradient(circle at 50% 90%, rgba(250, 204, 21, 0.14) 0%, rgba(250, 204, 21, 0.02) 28%, transparent 50%);
+  filter: blur(36px);
 }
 
 body::after {
@@ -51,8 +51,8 @@ body::after {
       transparent 1px
     ),
     linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 24px 24px;
-  mask-image: radial-gradient(circle at 50% 40%, black 28%, transparent 78%);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(circle at 50% 42%, black 28%, transparent 78%);
 }
 
 .hide-scrollbar {
