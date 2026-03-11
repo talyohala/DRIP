@@ -1,11 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('חסרים משתני סביבה של Supabase');
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase environment variables are missing. Using local placeholder values.');
 }
 
-export const supabase = createClient(supabaseUrl ?? '', supabaseKey ?? '');
+const resolvedUrl = supabaseUrl ?? 'https://placeholder.supabase.co';
+const resolvedAnonKey = supabaseAnonKey ?? 'placeholder-anon-key';
+
+export const supabase = createClient(resolvedUrl, resolvedAnonKey);
 export default supabase;
