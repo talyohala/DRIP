@@ -5,7 +5,7 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  background: #02030a;
+  background: #020202;
 }
 
 * {
@@ -18,7 +18,7 @@ body,
   margin: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(180deg, #02030a 0%, #04050f 45%, #02030a 100%);
+  background: linear-gradient(180deg, #020202 0%, #050505 50%, #020202 100%);
   color: #f8fafc;
 }
 
@@ -34,9 +34,9 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 22% 24%, rgba(217, 70, 239, 0.17) 0%, rgba(217, 70, 239, 0.03) 24%, transparent 42%),
+    radial-gradient(circle at 22% 24%, rgba(34, 211, 238, 0.16) 0%, rgba(34, 211, 238, 0.03) 24%, transparent 42%),
     radial-gradient(circle at 78% 16%, rgba(16, 185, 129, 0.16) 0%, rgba(16, 185, 129, 0.03) 24%, transparent 42%),
-    radial-gradient(circle at 50% 90%, rgba(250, 204, 21, 0.14) 0%, rgba(250, 204, 21, 0.02) 28%, transparent 50%);
+    radial-gradient(circle at 50% 90%, rgba(234, 179, 8, 0.13) 0%, rgba(234, 179, 8, 0.02) 28%, transparent 50%);
   filter: blur(36px);
 }
 
@@ -62,4 +62,10 @@ body::after {
 
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply border border-white/10 bg-white/[0.02] backdrop-blur-2xl;
+  }
 }
