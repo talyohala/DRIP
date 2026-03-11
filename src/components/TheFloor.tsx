@@ -1,86 +1,39 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Activity,
   Backpack,
-  Biohazard,
   Briefcase,
   ChevronsDown,
   CloudFog,
-  Clock,
-  Eye,
   FileText,
+  Flame,
   Ghost,
-  Hexagon,
   Hourglass,
   Loader2,
   Lock,
-  Magnet,
-  Radio,
   Share2,
   ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  Target,
   Wallet,
-  X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
-import {
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-  type TouchEvent as ReactTouchEvent,
-} from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { DripCoinIcon } from './DripCoinIcon';
+import { DripCoinBadge } from './DripCoinBadge';
+import { POWERS_DICT } from './powers';
 
 type LooseRecord = Record<string, any>;
+type FeedMode = 'בשבילך' | 'חם' | 'חדש' | 'ויראלי';
 
-type PowerDefinition = {
-  name: string;
-  icon: LucideIcon;
-  color: string;
-};
-
-type AssetCardProps = {
+type RankedAsset = {
   asset: LooseRecord;
-  currentUser: LooseRecord | null;
-  inventory: LooseRecord[];
-  setShowArsenal: (assetId: string) => void;
-  handleShare: (asset: LooseRecord) => Promise<void>;
-  handleTakeover: (
-    asset: LooseRecord,
-    activeValue: number,
-    e: ReactMouseEvent<HTMLButtonElement> | null,
-  ) => Promise<void>;
-  actionId: string | null;
-  labels: {
-    takeover: string;
-    yours: string;
-    frozen: string;
-  };
+  score: number;
+  hype: number;
+  viral: boolean;
+  yieldPerSecond: number;
 };
 
-const POWERS_DICT: Record<number, PowerDefinition> = {
-  7: { name: 'שוגר ראש', icon: Sparkles, color: 'text-[#007AFF]' },
-  8: { name: 'מסך עשן', icon: CloudFog, color: 'text-[#FF3B30]' },
-  9: { name: 'שאיבת הייפ', icon: Magnet, color: 'text-[#FF3B30]' },
-  4: { name: 'הזרקת הייפ', icon: Activity, color: 'text-[#007AFF]' },
-  10: { name: 'מגן ניאון', icon: ShieldCheck, color: 'text-[#007AFF]' },
-  1: { name: 'רוח רפאים', icon: Ghost, color: 'text-[#E5E7EB]' },
-  11: { name: 'הכפלת סיכון', icon: ChevronsDown, color: 'text-[#FF3B30]' },
-  2: { name: 'חומת מגן', icon: ShieldAlert, color: 'text-[#007AFF]' },
-  12: { name: 'מס קריפטו', icon: FileText, color: 'text-[#FF3B30]' },
-  13: { name: 'ניקוי זירה', icon: Target, color: 'text-[#E5E7EB]' },
-  5: { name: 'הרעלה', icon: Biohazard, color: 'text-[#FF3B30]' },
-  14: { name: 'מידע פנים', icon: Eye, color: 'text-[#007AFF]' },
-  15: { name: 'עיוות זמן', icon: Hourglass, color: 'text-[#E5E7EB]' },
-  3: { name: 'לוויתן', icon: Sparkles, color: 'text-[#E5E7EB]' },
-  6: { name: 'פצצת EMP', icon: Radio, color: 'text-[#FF3B30]' },
-  16: { name: 'הסנדק', icon: Briefcase, color: 'text-[#D4AF37]' },
-};
+const FEED_MODES: FeedMode[] = ['בשבילך', 'חם', 'חדש', 'ויראלי'];
 
 const calculateHype = (asset: LooseRecord) => {
   const start = new Date(asset.last_takeover_at || asset.created_at).getTime();
@@ -93,24 +46,101 @@ const calculateHype = (asset: LooseRecord) => {
 
 const isVideo = (url: string) => ['mp4', 'mov', 'webm', 'quicktime'].includes(url.split('.').pop()?.toLowerCase() || '');
 
-const AssetCard = ({
-  asset,
-  currentUser,
-  inventory,
-  setShowArsenal,
-  handleShare,
-  handleTakeover,
-  actionId,
-  labels,
-}: AssetCardProps) => {
+const calculateYieldPerSecond = (asset: LooseRecord, hype: number, viral: boolean) => {
+  const base = ((asset.current_value ?? 0) * 0.0001) * (hype / 100);
+  return viral ? base * 2 : base;
+};
+
+const buildRankedAssets = (
+  sourceAssets: LooseRecord[],
+  mode: FeedMode,
+  affinity: { image: number; video: number; owners: Record<string, number> },
+) => {
+  const now = Date.now();
+  const scored: RankedAsset[] = sourceAssets.map((asset) => {
+    const hype = calculateHype(asset);
+    const mediaType = isVideo(asset.media_url) ? 'video' : 'image';
+    const mediaAffinity = (affinity[mediaType] + 1) / (affinity.image + affinity.video + 2);
+    const ownerAffinity = Math.min((affinity.owners[asset.owner_id] ?? 0) / 8, 1);
+
+    const minutesSinceCreated = Math.max(1, Math.floor((now - new Date(asset.created_at).getTime()) / 60000));
+    const recencyBoost = Math.max(0, 1 - minutesSinceCreated / 240);
+    const momentum = (asset.current_value ?? 0) / Math.max(asset.initial_value ?? 500, 1);
+    const velocity = (asset.current_value ?? 0) / minutesSinceCreated;
+    const liquidity = Math.log10((asset.current_value ?? 0) + 10);
+    const underThreat = Boolean(
+      (asset.smoked_until && new Date(asset.smoked_until) > new Date()) ||
+        (asset.double_decay_until && new Date(asset.double_decay_until) > new Date()) ||
+        asset.taxed_by,
+    );
+    const riskPenalty = underThreat ? 0.25 : 0;
+    const viral = velocity > 55 && hype > 70;
+    const score = momentum * 0.35 + hype * 0.25 + recencyBoost * 25 + liquidity * 6 + mediaAffinity * 14 + ownerAffinity * 9 + (viral ? 18 : 0) - riskPenalty * 20;
+    return {
+      asset,
+      score,
+      hype,
+      viral,
+      yieldPerSecond: calculateYieldPerSecond(asset, hype, viral),
+    };
+  });
+
+  if (mode === 'חדש') {
+    return scored.sort((a, b) => new Date(b.asset.created_at).getTime() - new Date(a.asset.created_at).getTime());
+  }
+
+  if (mode === 'ויראלי') {
+    return scored.filter((item) => item.viral).sort((a, b) => b.score - a.score);
+  }
+
+  if (mode === 'חם') {
+    return scored.sort((a, b) => b.score - a.score);
+  }
+
+  const base = [...scored].sort((a, b) => b.score - a.score);
+  const discovery = scored
+    .filter((item) => Date.now() - new Date(item.asset.created_at).getTime() < 5 * 60 * 1000)
+    .sort((a, b) => b.score - a.score);
+
+  const result: RankedAsset[] = [];
+  const used = new Set<string>();
+  let discoveryIndex = 0;
+
+  base.forEach((item, index) => {
+    if (!used.has(item.asset.id)) {
+      result.push(item);
+      used.add(item.asset.id);
+    }
+    const shouldInjectDiscovery = (index + 1) % 4 === 0;
+    if (shouldInjectDiscovery && discovery[discoveryIndex] && !used.has(discovery[discoveryIndex].asset.id)) {
+      result.push(discovery[discoveryIndex]);
+      used.add(discovery[discoveryIndex].asset.id);
+      discoveryIndex += 1;
+    }
+  });
+
+  return result;
+};
+
+type AssetCardProps = {
+  item: RankedAsset;
+  currentUser: LooseRecord | null;
+  inventory: LooseRecord[];
+  setShowArsenal: (assetId: string) => void;
+  handleShare: (asset: LooseRecord) => Promise<void>;
+  handleTakeover: (asset: LooseRecord, activeValue: number, e: ReactMouseEvent<HTMLButtonElement> | null) => Promise<void>;
+  actionId: string | null;
+  onSignal: (asset: LooseRecord, weight: number) => void;
+};
+
+const AssetCard = ({ item, currentUser, inventory, setShowArsenal, handleShare, handleTakeover, actionId, onSignal }: AssetCardProps) => {
+  const { asset, hype, viral, yieldPerSecond } = item;
   const videoRef = useRef<HTMLVideoElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-
   const [scale, setScale] = useState(1);
   const [initialDist, setInitialDist] = useState(0);
 
   const video = isVideo(asset.media_url);
-  const hype = calculateHype(asset);
   const isMine = currentUser?.id === asset.owner_id;
   const isCreatorPopular = asset.creator?.is_verified || (asset.creator?.drip_coins ?? 0) > 500000;
   const activeValue = isCreatorPopular ? Math.floor(asset.current_value * 1.15) : asset.current_value;
@@ -121,22 +151,24 @@ const AssetCard = ({
   const isGhosted = asset.ghosted_until && new Date(asset.ghosted_until) > now && !isMine;
   const hasDoubleDecay = asset.double_decay_until && new Date(asset.double_decay_until) > now;
   const hasTimeWarp = asset.time_warp_until && new Date(asset.time_warp_until) > now;
-  const isOwnerWhale = asset.owner?.whale_until && new Date(asset.owner.whale_until) > now;
   const isOwnerGodfather = asset.owner?.godfather_until && new Date(asset.owner.godfather_until) > now;
   const hasInsiderInfo = currentUser?.insider_until && new Date(currentUser.insider_until) > now;
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && videoRef.current) {
-          videoRef.current.currentTime = 0;
-          videoRef.current.muted = false;
-          videoRef.current.play().catch(() => {
-            if (videoRef.current) {
-              videoRef.current.muted = true;
-              void videoRef.current.play();
-            }
-          });
+        if (entry.isIntersecting) {
+          onSignal(asset, 0.15);
+          if (videoRef.current) {
+            videoRef.current.currentTime = 0;
+            videoRef.current.muted = false;
+            videoRef.current.play().catch(() => {
+              if (videoRef.current) {
+                videoRef.current.muted = true;
+                void videoRef.current.play();
+              }
+            });
+          }
         } else if (videoRef.current) {
           videoRef.current.pause();
         }
@@ -147,27 +179,19 @@ const AssetCard = ({
     return () => {
       if (cardRef.current) observer.unobserve(cardRef.current);
     };
-  }, []);
+  }, [asset, onSignal]);
 
   const handleTouchStart = (e: ReactTouchEvent<HTMLDivElement>) => {
     if (e.touches.length === 2) {
       e.stopPropagation();
-      setInitialDist(
-        Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY,
-        ),
-      );
+      setInitialDist(Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY));
     }
   };
 
   const handleTouchMove = (e: ReactTouchEvent<HTMLDivElement>) => {
     if (e.touches.length === 2) {
       e.stopPropagation();
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY,
-      );
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
       if (initialDist > 0) {
         setScale((prev) => Math.max(1, Math.min(prev * (dist / initialDist), 4)));
       }
@@ -175,178 +199,141 @@ const AssetCard = ({
     }
   };
 
-  const handleTouchEnd = () => setScale(1);
-  const totalInventory = inventory.reduce((acc: number, item: LooseRecord) => acc + item.quantity, 0);
+  const totalInventory = inventory.reduce((acc: number, inv) => acc + inv.quantity, 0);
 
   return (
-    <div ref={cardRef} className="relative h-[100dvh] w-full shrink-0 snap-start snap-always overflow-hidden bg-[#020202]">
+    <div ref={cardRef} className="relative h-[100dvh] w-full shrink-0 snap-start snap-always overflow-hidden bg-black">
       <motion.div
-        className="absolute inset-0 z-0 h-full w-full origin-center"
+        className="absolute inset-0 z-0 origin-center"
         animate={{ scale }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        onTouchEnd={() => setScale(1)}
       >
         {video ? (
           <video
             ref={videoRef}
             src={asset.media_url}
-            className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[85%] blur-2xl' : ''}`}
+            className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[90%] blur-2xl' : ''}`}
             playsInline
             loop
           />
         ) : (
-          <img
-            src={asset.media_url}
-            className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[85%] blur-2xl' : ''}`}
-            alt={asset.title || 'נכס'}
-          />
+          <img src={asset.media_url} className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[90%] blur-2xl' : ''}`} alt={asset.title || 'נכס'} />
         )}
       </motion.div>
 
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div className="absolute inset-0 bg-gradient-to-t from-[#020202]/95 via-[#020202]/25 to-[#020202]/32" />
-
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-black/35" />
         {isSmoked && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <CloudFog size={98} className="animate-pulse text-white/15" />
+            <CloudFog size={100} className="text-white/25" />
           </div>
         )}
 
-        <div className="pointer-events-auto absolute left-4 top-6 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#111111]/70 px-3 py-1.5 backdrop-blur-3xl">
-          <Wallet size={14} className="text-[#E5E7EB]/80" />
-          <span className="text-[11px] font-semibold text-[#E5E7EB]">{(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')}</span>
-          <DripCoinIcon className="h-auto" />
+        <div className="pointer-events-auto absolute left-4 top-6 flex items-center gap-2 rounded-full border border-white/10 bg-[#1C1C1E]/85 px-3 py-1.5 backdrop-blur-3xl">
+          <Wallet size={14} className="text-[#0A84FF]" />
+          <DripCoinBadge amount={(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')} />
         </div>
 
         <div className="absolute right-4 top-6 flex flex-col items-end gap-2">
+          {viral && (
+            <div className="flex items-center gap-1 rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-1 backdrop-blur-3xl">
+              <Flame size={11} className="text-[#FF453A]" />
+              <span className="text-[10px] font-bold text-white">ויראלי</span>
+            </div>
+          )}
           {isOwnerGodfather && (
-            <div className="flex items-center gap-1 rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1 backdrop-blur-3xl">
-              <Briefcase size={10} className="text-[#D4AF37]" />
-              <span className="text-[9px] font-semibold text-[#E5E7EB]">הסנדק</span>
+            <div className="flex items-center gap-1 rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-1 backdrop-blur-3xl">
+              <Briefcase size={10} className="text-[#FF453A]" />
+              <span className="text-[10px] font-bold text-white">הסנדק פעיל</span>
             </div>
           )}
           {hasInsiderInfo && asset.taxed_by && (
-            <div className="flex items-center gap-1 rounded-full border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-2.5 py-1 backdrop-blur-3xl">
-              <FileText size={10} className="text-[#FF3B30]" />
-              <span className="text-[9px] font-semibold text-[#E5E7EB]">מלכודת מס</span>
+            <div className="flex items-center gap-1 rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 backdrop-blur-3xl">
+              <FileText size={10} className="text-[#0A84FF]" />
+              <span className="text-[10px] font-bold text-white">מלכודת מס מזוהה</span>
             </div>
           )}
         </div>
 
-        {hype <= 20 && (
-          <div className="absolute bottom-[168px] left-4 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-[#FF3B30]/35 bg-[#111111]/70 backdrop-blur-3xl">
-            <Clock size={12} className="absolute text-[#FF3B30]/35" />
-            <span className="relative z-10 text-[10px] font-semibold text-[#E5E7EB]">{hype}ד</span>
-          </div>
-        )}
-
-        <div className="pointer-events-auto absolute right-4 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-3">
+        <div className="pointer-events-auto absolute right-4 top-1/2 flex -translate-y-1/2 flex-col gap-3">
           <button
             onClick={() => {
+              onSignal(asset, 0.6);
               void handleShare(asset);
             }}
-            className="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-[#111111]/68 text-[#E5E7EB]/85 backdrop-blur-3xl transition-all hover:border-[#007AFF]/35 hover:text-[#E5E7EB]"
-            aria-label="שיתוף"
+            className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-[#1C1C1E]/80 text-white/90 backdrop-blur-3xl"
           >
             <Share2 size={16} />
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
+              onSignal(asset, 0.9);
               setShowArsenal(asset.id);
             }}
-            className="relative grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-[#111111]/68 text-[#E5E7EB]/85 backdrop-blur-3xl transition-all hover:border-[#007AFF]/35 hover:text-[#E5E7EB]"
-            aria-label="ארסנל"
+            className="relative grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-[#1C1C1E]/80 text-white/90 backdrop-blur-3xl"
           >
             <Backpack size={16} />
             {totalInventory > 0 && (
-              <div className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full border border-black/70 bg-[#007AFF] text-[8px] font-semibold text-white">
+              <div className="absolute -right-1 -top-1 grid h-4.5 w-4.5 place-items-center rounded-full border border-black bg-[#0A84FF] text-[8px] font-bold text-white">
                 {totalInventory}
               </div>
             )}
           </button>
         </div>
 
-        <div className="pointer-events-auto absolute bottom-[88px] left-3 right-3 z-30">
-          <div className="rounded-[1.8rem] border border-white/10 bg-[#111111]/72 px-3 py-2.5 shadow-[0_20px_55px_rgba(0,0,0,0.72)] backdrop-blur-3xl">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex flex-1 items-center gap-2">
-                <div
-                  className={`grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full border ${
-                    isOwnerWhale ? 'border-[#D4AF37]/45 bg-[#D4AF37]/10' : 'border-white/20 bg-black/30'
+        <div className="pointer-events-auto absolute bottom-[90px] left-3 right-3">
+          <div className="rounded-[1.9rem] border border-white/10 bg-[#1C1C1E]/80 p-3 shadow-[0_24px_60px_rgba(0,0,0,0.75)] backdrop-blur-3xl">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white">{asset.title || 'נכס ללא שם'}</p>
+                <p className="truncate text-[11px] text-white/60">{isGhosted ? 'בעלות מוסתרת' : asset.owner?.username || 'משתמש'}</p>
+              </div>
+              <DripCoinBadge amount={activeValue.toLocaleString('he-IL')} />
+            </div>
+
+            <div className="mb-2 flex items-center gap-2 text-[11px] text-white/70">
+              <Zap size={12} className="text-[#0A84FF]" />
+              <span>תשואה משוערת לשנייה: {yieldPerSecond.toFixed(2)}</span>
+              {hasDoubleDecay && <ChevronsDown size={12} className="text-[#FF453A]" />}
+              {hasTimeWarp && <Hourglass size={12} className="text-white" />}
+              {hype <= 20 && <span className="rounded-full border border-[#FF453A]/35 bg-[#FF453A]/10 px-2 py-0.5 text-[#FF453A]">לחץ זמן</span>}
+            </div>
+
+            <div className="mb-3 flex items-center gap-2">
+              <span className={`text-xs font-bold ${hype <= 20 ? 'text-[#FF453A]' : 'text-white/80'}`}>{hype}% הייפ</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full border border-white/10 bg-black/45">
+                <motion.div className={`${hype <= 20 ? 'bg-[#FF453A]' : 'bg-[#0A84FF]'} h-full`} animate={{ width: `${hype}%` }} />
+              </div>
+            </div>
+
+            <div>
+              {isMine ? (
+                <div className="w-full rounded-2xl border border-white/15 bg-white/[0.03] py-2 text-center text-xs font-bold text-white/75">הנכס שלך</div>
+              ) : isFrozen ? (
+                <div className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-[#0A84FF]/35 bg-[#0A84FF]/12 py-2 text-xs font-bold text-white">
+                  <Lock size={13} />
+                  מוגן בחומת מגן
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    onSignal(asset, 1.6);
+                    void handleTakeover(asset, activeValue, e);
+                  }}
+                  disabled={actionId === asset.id || (currentUser?.drip_coins ?? 0) < activeValue}
+                  className={`w-full rounded-2xl border py-2 text-xs font-black transition ${
+                    actionId === asset.id
+                      ? 'border-[#0A84FF] bg-[#0A84FF] text-white'
+                      : 'border-[#0A84FF]/40 bg-[#0A84FF]/14 text-white hover:bg-[#0A84FF]/22'
                   }`}
                 >
-                  {isGhosted ? (
-                    <Ghost size={15} className="text-[#E5E7EB]/55" />
-                  ) : asset.owner?.avatar_url ? (
-                    <img src={asset.owner.avatar_url} className="h-full w-full object-cover" alt={asset.owner?.username || 'בעלים'} />
-                  ) : (
-                    <span className="text-xs">🧑🏽‍🚀</span>
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center gap-1">
-                    <span className="truncate text-[12px] font-semibold text-[#E5E7EB]">
-                      {isGhosted ? 'מוסתר' : asset.owner?.username || 'בעלים לא ידוע'}
-                    </span>
-                    {!isGhosted && asset.owner?.is_verified && <Hexagon size={10} className="shrink-0 fill-[#007AFF]/20 text-[#007AFF]" />}
-                  </div>
-                  <div className="mb-1.5 flex items-center gap-1.5 text-[9px] text-[#E5E7EB]/55">
-                    <span className="truncate">{asset.title}</span>
-                    {hasDoubleDecay && <ChevronsDown size={10} className="text-[#FF3B30]" />}
-                    {hasTimeWarp && <Hourglass size={10} className="text-[#E5E7EB]/75" />}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-[10px] font-semibold ${hype <= 20 ? 'text-[#FF3B30]' : 'text-[#E5E7EB]/75'}`}>{hype}%</span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full border border-white/10 bg-black/40">
-                      <motion.div
-                        className={`h-full ${hype <= 20 ? 'bg-[#FF3B30]' : 'bg-[#007AFF]'}`}
-                        animate={{ width: `${hype}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="shrink-0">
-                {isMine ? (
-                  <div className="rounded-full border border-white/15 bg-white/5 px-4 py-2">
-                    <span className="text-[10px] font-semibold text-[#E5E7EB]/85">{labels.yours}</span>
-                  </div>
-                ) : isFrozen ? (
-                  <div className="flex items-center gap-1.5 rounded-full border border-[#007AFF]/35 bg-[#007AFF]/10 px-3.5 py-2 text-[#E5E7EB]">
-                    <Lock size={12} />
-                    <span className="text-[10px] font-semibold">{labels.frozen}</span>
-                  </div>
-                ) : (
-                  <button
-                    onClick={(e) => {
-                      void handleTakeover(asset, activeValue, e);
-                    }}
-                    disabled={actionId === asset.id || (currentUser?.drip_coins ?? 0) < activeValue}
-                    className={`rounded-full border px-3 py-1.5 transition-all active:scale-95 ${
-                      actionId === asset.id
-                        ? 'border-[#007AFF] bg-[#007AFF] text-white'
-                        : 'border-[#007AFF]/45 bg-[#007AFF]/12 text-[#E5E7EB] hover:bg-[#007AFF]/20'
-                    }`}
-                  >
-                    {actionId === asset.id ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <div className="flex flex-col items-start leading-tight">
-                        <span className="text-[9px] font-semibold">{labels.takeover}</span>
-                        <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold">
-                          {activeValue.toLocaleString('he-IL')}
-                          <DripCoinIcon className="h-auto" />
-                        </span>
-                      </div>
-                    )}
-                  </button>
-                )}
-              </div>
+                  {actionId === asset.id ? <Loader2 size={15} className="mx-auto animate-spin" /> : 'השתלטות מיידית'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -361,35 +348,23 @@ type TheFloorProps = {
 
 export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
   const [assets, setAssets] = useState<LooseRecord[]>([]);
-  const [originalAssets, setOriginalAssets] = useState<LooseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'trending' | 'recent'>('recent');
-
+  const [mode, setMode] = useState<FeedMode>('בשבילך');
   const [currentUser, setCurrentUser] = useState<LooseRecord | null>(null);
   const [inventory, setInventory] = useState<LooseRecord[]>([]);
   const [showArsenal, setShowArsenal] = useState<string | null>(null);
-
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [affinity, setAffinity] = useState<{ image: number; video: number; owners: Record<string, number> }>({
+    image: 1,
+    video: 1,
+    owners: {},
+  });
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const labels = {
-    title: 'זירת דריפ',
-    takeover: 'השתלטות',
-    trending: 'חם',
-    recent: 'חדש',
-    yours: 'שלך',
-    arsenal: 'ארסנל',
-    frozen: 'מוגן',
-  };
-
   useEffect(() => {
     const preventDefaultZoom = (e: TouchEvent) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
+      if (e.touches.length > 1) e.preventDefault();
     };
     document.addEventListener('touchmove', preventDefaultZoom, { passive: false });
     return () => document.removeEventListener('touchmove', preventDefaultZoom);
@@ -408,17 +383,16 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
       void supabase.removeChannel(channel);
       window.clearInterval(hypeInterval);
     };
-  }, [filter, refreshKey]);
+  }, [refreshKey]);
 
   const loadUser = async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase.from('drip_users').select('*').eq('id', user.id).single();
-      setCurrentUser(data);
-      await fetchInventory(user.id);
-    }
+    if (!user) return;
+    const { data } = await supabase.from('drip_users').select('*').eq('id', user.id).single();
+    setCurrentUser(data);
+    await fetchInventory(user.id);
   };
 
   const fetchInventory = async (userId = currentUser?.id) => {
@@ -428,58 +402,46 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
   };
 
   const fetchAssets = async () => {
-    let query = supabase
+    const query = supabase
       .from('drip_assets')
       .select(
         '*, owner:drip_users!owner_id(username, avatar_url, is_verified, drip_coins, godfather_until, whale_until), creator:drip_users!creator_id(username, is_verified, drip_coins)',
       );
-    if (filter === 'recent') query = query.order('created_at', { ascending: false });
-    else query = query.order('current_value', { ascending: false });
     const { data } = await query;
-    if (data) {
-      setOriginalAssets(data);
-      setAssets(data);
-    }
+    setAssets(data ?? []);
     setLoading(false);
   };
 
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!containerRef.current) return;
-      const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-      if (scrollTop + clientHeight >= scrollHeight - 100) setAssets((prev) => [...prev, ...originalAssets]);
-    };
-    const container = containerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      return () => container.removeEventListener('scroll', handleScroll);
-    }
-    return undefined;
-  }, [originalAssets]);
-
-  const onTouchStart = (e: ReactTouchEvent<HTMLDivElement>) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+  const onSignal = (asset: LooseRecord, weight: number) => {
+    const mediaType = isVideo(asset.media_url) ? 'video' : 'image';
+    setAffinity((prev) => ({
+      image: prev.image + (mediaType === 'image' ? weight : 0),
+      video: prev.video + (mediaType === 'video' ? weight : 0),
+      owners: {
+        ...prev.owners,
+        [asset.owner_id]: (prev.owners[asset.owner_id] ?? 0) + weight,
+      },
+    }));
   };
 
-  const onTouchMove = (e: ReactTouchEvent<HTMLDivElement>) => setTouchEnd(e.targetTouches[0].clientX);
+  const rankedAssets = useMemo(() => buildRankedAssets(assets, mode, affinity), [assets, mode, affinity]);
 
-  const onTouchEndHandler = () => {
-    if (touchStart === null || touchEnd === null) return;
-    const distance = touchStart - touchEnd;
-    const isSwipe = Math.abs(distance) > 75;
-
-    if (isSwipe) {
-      setFilter((prev) => (prev === 'recent' ? 'trending' : 'recent'));
+  const marketPulse = useMemo(() => {
+    if (rankedAssets.length === 0) {
+      return { marketCap: 0, avgHype: 0, viralCount: 0 };
     }
-  };
+    const marketCap = rankedAssets.reduce((sum, item) => sum + (item.asset.current_value ?? 0), 0);
+    const avgHype = rankedAssets.reduce((sum, item) => sum + item.hype, 0) / rankedAssets.length;
+    const viralCount = rankedAssets.filter((item) => item.viral).length;
+    return { marketCap, avgHype, viralCount };
+  }, [rankedAssets]);
 
   const handleShare = async (asset: LooseRecord) => {
     try {
       if (!navigator.share) throw new Error('share-not-supported');
       await navigator.share({
-        title: `${asset.title} - הזירה`,
-        text: `בדקו את הנכס הזה בזירה. בבעלות ${asset.owner?.username || 'משתמש אנונימי'}`,
+        title: `${asset.title} - DRIP`,
+        text: `בדקו את הנכס הזה בזירה`,
         url: window.location.href,
       });
     } catch {
@@ -495,11 +457,12 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
   const handleUsePower = async (powerId: number, asset: LooseRecord | null | undefined) => {
     setShowArsenal(null);
     if (!asset) return toast.error('הנכס לא נמצא');
-    const invItem = inventory.find((i) => i.power_id === powerId);
+    const invItem = inventory.find((item) => item.power_id === powerId);
     if (!invItem || invItem.quantity < 1) return toast.error('הכוח לא נמצא בארסנל');
 
     try {
-      setInventory((prev) => prev.map((i) => (i.id === invItem.id ? { ...i, quantity: i.quantity - 1 } : i)));
+      onSignal(asset, 1.1);
+      setInventory((prev) => prev.map((item) => (item.id === invItem.id ? { ...item, quantity: item.quantity - 1 } : item)));
       const newQuantity = invItem.quantity - 1;
       if (newQuantity > 0) await supabase.from('drip_inventory').update({ quantity: newQuantity }).eq('id', invItem.id);
       else await supabase.from('drip_inventory').delete().eq('id', invItem.id);
@@ -627,15 +590,16 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
         toast.success('סטטוס לוויתן הופעל', { icon: '✨' });
       } else if (powerId === 6) {
         toast.success('פצצת EMP הופעלה', { icon: '📻' });
-        assets.forEach(async (a) => {
-          if (a.id !== targetAsset.id) {
-            const tTime = new Date(a.last_takeover_at || a.created_at);
+        await Promise.all(
+          assets.map(async (item) => {
+            if (item.id === targetAsset.id) return;
+            const tTime = new Date(item.last_takeover_at || item.created_at);
             await supabase
               .from('drip_assets')
               .update({ last_takeover_at: new Date(tTime.getTime() - 12 * 60000).toISOString() })
-              .eq('id', a.id);
-          }
-        });
+              .eq('id', item.id);
+          }),
+        );
       } else if (powerId === 16) {
         if (!currentUser) throw new Error('נדרש משתמש פעיל');
         await supabase
@@ -651,18 +615,12 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
     }
   };
 
-  const handleTakeover = async (
-    asset: LooseRecord,
-    activeValue: number,
-    e: ReactMouseEvent<HTMLButtonElement> | null,
-  ) => {
+  const handleTakeover = async (asset: LooseRecord, activeValue: number, e: ReactMouseEvent<HTMLButtonElement> | null) => {
     if (e) e.stopPropagation();
     if (actionId) return;
-
     if (asset.frozen_until && new Date(asset.frozen_until) > new Date()) return toast.error('הנכס מוגן בחומת מגן');
 
     setActionId(asset.id);
-
     try {
       if (!currentUser) throw new Error('נדרשת התחברות');
 
@@ -692,16 +650,12 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
         toast.success('שולמה עמלת מס קריפטו', { icon: '💸' });
       }
 
-      setCurrentUser((prev: LooseRecord | null) => {
-        if (!prev) return prev;
-        return { ...prev, drip_coins: prev.drip_coins - activeValue };
-      });
+      setCurrentUser((prev) => (prev ? { ...prev, drip_coins: prev.drip_coins - activeValue } : prev));
 
       if (freshAsset.owner_id) {
         const { data: oldOwner } = await supabase.from('drip_users').select('drip_coins').eq('id', freshAsset.owner_id).single();
         if (oldOwner) await supabase.from('drip_users').update({ drip_coins: oldOwner.drip_coins + ownerCut }).eq('id', freshAsset.owner_id);
       }
-
       if (freshAsset.creator_id && freshAsset.creator_id !== freshAsset.owner_id) {
         const { data: creator } = await supabase.from('drip_users').select('drip_coins').eq('id', freshAsset.creator_id).single();
         if (creator) await supabase.from('drip_users').update({ drip_coins: creator.drip_coins + royalties }).eq('id', freshAsset.creator_id);
@@ -725,6 +679,7 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
         .eq('id', asset.id);
 
       toast.success('השתלטות הצליחה, הנכס שלך', { icon: '⚡' });
+      onSignal(asset, 2.2);
       await fetchAssets();
     } catch (err: any) {
       toast.error(err?.message || 'שגיאה בהשתלטות');
@@ -736,64 +691,61 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
 
   if (loading) {
     return (
-      <div className="grid h-[100dvh] w-full place-items-center bg-[#020202] text-sm text-[#E5E7EB]/65">
-        טוען את הזירה...
+      <div className="grid h-[100dvh] place-items-center">
+        <Loader2 className="animate-spin text-[#0A84FF]" />
       </div>
     );
   }
 
-  const selectedAsset = showArsenal ? assets.find((a) => a.id === showArsenal) : null;
+  const selectedAsset = showArsenal ? rankedAssets.find((item) => item.asset.id === showArsenal)?.asset : null;
 
   return (
-    <div
-      className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#020202] font-sans"
-      dir="rtl"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEndHandler}
-      style={{ touchAction: 'pan-y' }}
-    >
-      <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex items-center justify-center">
-        <div className="rounded-full border border-white/10 bg-[#111111]/70 px-4 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-[#E5E7EB]/85 backdrop-blur-3xl">
-          {labels.title}
+    <div className="relative h-[100dvh] w-full overflow-hidden">
+      <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
+        <div className="glass-panel pointer-events-auto flex w-full max-w-xl items-center justify-between rounded-2xl px-3 py-2">
+          <div>
+            <p className="text-[10px] font-bold tracking-[0.16em] text-white/55">מנוע מסחר חי</p>
+            <p className="text-xs font-bold text-white">אלגוריתם דינמי בסגנון פיד מהיר</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="rounded-full border border-white/10 bg-black/45 px-2 py-1 text-white/75">
+              הייפ ממוצע {marketPulse.avgHype.toFixed(0)}%
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="pointer-events-none fixed left-0 right-0 top-[3.2rem] z-40 flex items-center justify-center gap-2">
-        <button
-          onClick={() => setFilter('recent')}
-          className={`pointer-events-auto rounded-full border px-4 py-1 text-[11px] font-semibold backdrop-blur-3xl transition-all ${
-            filter === 'recent'
-              ? 'border-white/25 bg-white/10 text-[#E5E7EB]'
-              : 'border-white/10 bg-[#111111]/65 text-[#E5E7EB]/50 hover:text-[#E5E7EB]/75'
-          }`}
-        >
-          {labels.recent}
-        </button>
-        <button
-          onClick={() => setFilter('trending')}
-          className={`pointer-events-auto rounded-full border px-4 py-1 text-[11px] font-semibold backdrop-blur-3xl transition-all ${
-            filter === 'trending'
-              ? 'border-[#007AFF]/45 bg-[#007AFF]/15 text-[#E5E7EB]'
-              : 'border-white/10 bg-[#111111]/65 text-[#E5E7EB]/50 hover:text-[#E5E7EB]/75'
-          }`}
-        >
-          {labels.trending}
-        </button>
+      <div className="pointer-events-none fixed inset-x-0 top-[5.4rem] z-40 flex justify-center px-4">
+        <div className="pointer-events-auto flex w-full max-w-xl items-center gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-[#1C1C1E]/80 p-1.5 backdrop-blur-3xl">
+          {FEED_MODES.map((item) => (
+            <button
+              key={item}
+              onClick={() => setMode(item)}
+              className={`whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-bold transition ${mode === item ? 'bg-[#0A84FF]/20 text-white' : 'text-white/55'}`}
+            >
+              {item}
+            </button>
+          ))}
+          <div className="mr-auto flex items-center gap-2 text-[11px] text-white/65">
+            <span>שווי שוק {marketPulse.marketCap.toLocaleString('he-IL')}</span>
+            <span className="h-1 w-1 rounded-full bg-white/30" />
+            <span className="text-[#FF453A]">{marketPulse.viralCount} ויראליים</span>
+          </div>
+        </div>
       </div>
 
-      <div ref={containerRef} className="hide-scrollbar h-[100dvh] w-full flex-1 snap-y snap-mandatory overflow-y-scroll">
-        {assets.map((asset, index) => (
+      <div ref={containerRef} className="hide-scrollbar h-[100dvh] snap-y snap-mandatory overflow-y-scroll pt-[7.8rem]">
+        {rankedAssets.map((item) => (
           <AssetCard
-            key={`${asset.id}-${index}`}
-            asset={asset}
+            key={item.asset.id}
+            item={item}
             currentUser={currentUser}
             inventory={inventory}
             setShowArsenal={setShowArsenal}
             handleShare={handleShare}
             handleTakeover={handleTakeover}
             actionId={actionId}
-            labels={labels}
+            onSignal={onSignal}
           />
         ))}
       </div>
@@ -801,49 +753,39 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
       <AnimatePresence>
         {showArsenal && (
           <motion.div
-            initial={{ y: 100, opacity: 0, scale: 0.96 }}
+            initial={{ y: 100, opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 100, opacity: 0, scale: 0.96 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 210 }}
-            className="fixed bottom-[122px] left-4 right-4 z-50 flex h-40 flex-col overflow-hidden rounded-[1.7rem] border border-white/10 bg-[#111111]/88 shadow-[0_24px_60px_rgba(0,0,0,0.78)] backdrop-blur-3xl"
+            exit={{ y: 100, opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 24, stiffness: 210 }}
+            className="fixed bottom-[118px] left-4 right-4 z-50 flex h-44 flex-col overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#1C1C1E]/88 shadow-[0_24px_60px_rgba(0,0,0,0.78)] backdrop-blur-3xl"
           >
-            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-5 py-3">
-              <span className="flex items-center gap-2 text-xs font-semibold text-[#E5E7EB]">
-                <Backpack size={14} />
-                {labels.arsenal}
-              </span>
-              <button
-                onClick={() => setShowArsenal(null)}
-                className="rounded-full border border-white/15 bg-black/35 p-1.5 text-[#E5E7EB]/70 transition-colors hover:text-[#E5E7EB]"
-                aria-label="סגירה"
-              >
-                <X size={14} />
+            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-5 py-3">
+              <span className="text-xs font-black text-white">ארסנל פעיל</span>
+              <button onClick={() => setShowArsenal(null)} className="rounded-full border border-white/15 bg-black/40 px-2 py-1 text-[10px] font-bold text-white/70">
+                סגירה
               </button>
             </div>
-
-            <div className="hide-scrollbar flex flex-1 snap-x items-center gap-2.5 overflow-x-auto px-4">
+            <div className="hide-scrollbar flex flex-1 items-center gap-2.5 overflow-x-auto px-4">
               {inventory.length === 0 ? (
-                <div className="w-full text-center text-[10px] font-semibold text-[#E5E7EB]/35">הארסנל ריק</div>
+                <div className="w-full text-center text-xs text-white/45">הארסנל ריק</div>
               ) : (
-                inventory.map((item, idx) => {
+                inventory.map((item, index) => {
                   const power = POWERS_DICT[item.power_id];
                   if (!power) return null;
+                  const Icon = power.icon as LucideIcon;
                   return (
                     <motion.button
                       key={item.id}
-                      type="button"
-                      initial={{ opacity: 0, x: 18 }}
+                      initial={{ opacity: 0, x: 15 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.04 }}
+                      transition={{ delay: index * 0.03 }}
                       onClick={() => void handleUsePower(item.power_id, selectedAsset)}
-                      className="group h-24 w-24 shrink-0 snap-center rounded-2xl border border-white/10 bg-[#0C0C0C]/90 transition-all hover:border-[#007AFF]/35"
+                      className="h-24 w-24 shrink-0 rounded-2xl border border-white/10 bg-[#111112] p-2"
                     >
-                      <div className="flex h-full flex-col items-center justify-center gap-1.5">
-                        <power.icon size={20} className={`${power.color} transition-transform group-hover:scale-110`} />
-                        <div className="text-center">
-                          <h3 className="text-[9px] font-semibold text-[#E5E7EB]">{power.name}</h3>
-                          <p className="text-[9px] font-semibold text-[#E5E7EB]/65">x{item.quantity}</p>
-                        </div>
+                      <div className="flex h-full flex-col items-center justify-center gap-1">
+                        <Icon size={19} className={power.color} />
+                        <p className="text-[10px] font-bold text-white">{power.name}</p>
+                        <p className="text-[10px] text-white/60">x{item.quantity}</p>
                       </div>
                     </motion.button>
                   );

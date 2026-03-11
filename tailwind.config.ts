@@ -9,10 +9,11 @@ export default {
     extend: {
       colors: {
         drip: {
-          black: '#020202',
-          velvet: '#0A0A0C',
-          cyan: '#00F0FF',
-          danger: '#FF2A5F',
+          black: '#000000',
+          titanium: '#1C1C1E',
+          graphite: '#2C2C2E',
+          cyan: '#0A84FF',
+          danger: '#FF453A',
           glass: 'rgba(255, 255, 255, 0.03)',
           glassBorder: 'rgba(255, 255, 255, 0.08)'
         }
