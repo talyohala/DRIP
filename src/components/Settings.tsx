@@ -1,8 +1,9 @@
-import { ChevronRight, MoonStar, RotateCcw, ShieldCheck, Smartphone, Vibrate } from 'lucide-react';
+import { ChevronRight, MoonStar, RotateCcw, ShieldCheck, Smartphone, Trophy, Vibrate } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 type SettingsProps = {
   onClose: () => void;
+  onOpenWarRoom: () => void;
 };
 
 type AppSettings = {
@@ -21,7 +22,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   haptics: true,
 };
 
-export default function Settings({ onClose }: SettingsProps) {
+export default function Settings({ onClose, onOpenWarRoom }: SettingsProps) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
@@ -52,16 +53,25 @@ export default function Settings({ onClose }: SettingsProps) {
   ];
 
   return (
-    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-32 pt-5">
+    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-20 pt-5">
       <div className="mx-auto w-full max-w-xl space-y-4 px-4">
         <article className="glass-panel rounded-[2rem] p-4">
-          <button
-            onClick={onClose}
-            className="mb-3 inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/80"
-          >
-            <ChevronRight size={14} />
-            חזרה לפרופיל
-          </button>
+          <div className="mb-3 flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/80"
+            >
+              <ChevronRight size={14} />
+              חזרה לפרופיל
+            </button>
+            <button
+              onClick={onOpenWarRoom}
+              className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-white/80"
+            >
+              <Trophy size={14} />
+              מעבר לדירוג
+            </button>
+          </div>
           <h1 className="text-2xl font-black text-white">הגדרות כלליות</h1>
           <p className="mt-2 text-xs text-white/55">מרכז שליטה אישי לחוויית שימוש בסגנון Titanium Pro</p>
         </article>

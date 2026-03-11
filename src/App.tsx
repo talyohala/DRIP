@@ -11,6 +11,7 @@ import WarRoom from './components/WarRoom';
 import { supabase } from './lib/supabase';
 
 type ViewKey = 'floor' | 'mint' | 'market' | 'warroom' | 'profile' | 'settings';
+type PrimaryView = 'floor' | 'mint' | 'market' | 'profile';
 
 const getHashView = (): ViewKey => {
   const hash = window.location.hash.replace('#', '');
@@ -51,13 +52,15 @@ export default function App() {
     setView(nextView);
   };
 
+  const navigatePrimary = (nextView: PrimaryView) => navigate(nextView);
+
   const screen = useMemo(() => {
     if (view === 'floor') {
       return <TheFloor refreshKey={feedRefreshKey} />;
     }
 
     if (view === 'market') {
-      return <Market />;
+      return <Market onOpenWarRoom={() => navigate('warroom')} onOpenProfile={() => navigate('profile')} />;
     }
 
     if (view === 'warroom') {
@@ -76,10 +79,10 @@ export default function App() {
     }
 
     if (view === 'settings') {
-      return <Settings onClose={() => navigate('profile')} />;
+      return <Settings onClose={() => navigate('profile')} onOpenWarRoom={() => navigate('warroom')} />;
     }
 
-    return <Profile onOpenSettings={() => navigate('settings')} />;
+    return <Profile onOpenSettings={() => navigate('settings')} onOpenWarRoom={() => navigate('warroom')} />;
   }, [view, feedRefreshKey]);
 
   return (
@@ -100,7 +103,7 @@ export default function App() {
       ) : (
         <>
           <div className="relative z-10 h-full">{screen}</div>
-          <Navigation view={view} onChange={navigate} />
+          <Navigation view={view} onChange={navigatePrimary} />
         </>
       )}
     </main>

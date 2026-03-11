@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Loader2, LogOut, Settings2, Shield, UserRound } from 'lucide-react';
+import { Loader2, LogOut, Settings2, Shield, Trophy, UserRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
@@ -14,9 +14,10 @@ const isVideo = (url: string) => ['mp4', 'mov', 'webm', 'quicktime'].includes(ur
 
 type ProfileProps = {
   onOpenSettings: () => void;
+  onOpenWarRoom: () => void;
 };
 
-export default function Profile({ onOpenSettings }: ProfileProps) {
+export default function Profile({ onOpenSettings, onOpenWarRoom }: ProfileProps) {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<LooseRecord | null>(null);
   const [assets, setAssets] = useState<LooseRecord[]>([]);
@@ -79,7 +80,7 @@ export default function Profile({ onOpenSettings }: ProfileProps) {
   }
 
   return (
-    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-32 pt-5">
+    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-20 pt-5">
       <div className="mx-auto w-full max-w-xl space-y-4 px-4">
         <article className="glass-panel rounded-[2rem] p-4">
           <div className="flex items-start justify-between gap-3">
@@ -97,6 +98,13 @@ export default function Profile({ onOpenSettings }: ProfileProps) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={onOpenWarRoom}
+                className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.03] text-white/70"
+                aria-label="מעבר לדירוג"
+              >
+                <Trophy size={16} />
+              </button>
               <button
                 onClick={onOpenSettings}
                 className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/[0.03] text-white/70"

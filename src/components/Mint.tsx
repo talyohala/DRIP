@@ -126,7 +126,7 @@ export default function Mint({ onMinted }: MintProps) {
   };
 
   return (
-    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-32 pt-5">
+    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-20 pt-5">
       <div className="mx-auto w-full max-w-xl space-y-4 px-4">
         <header className="glass-panel rounded-[2rem] p-4">
           <h1 className="text-2xl font-black text-white">סטודיו הנפקה</h1>

@@ -1,24 +1,24 @@
-import { motion } from 'framer-motion';
-import { Home, Plus, Settings, ShoppingBag, Trophy, UserRound } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronDown, Home, Plus, ShoppingBag, UserRound, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 type ViewKey = 'floor' | 'mint' | 'market' | 'warroom' | 'profile' | 'settings';
+type PrimaryView = 'floor' | 'mint' | 'market' | 'profile';
 
 type NavigationProps = {
   view: ViewKey;
-  onChange: (view: ViewKey) => void;
+  onChange: (view: PrimaryView) => void;
 };
 
-const SIDE_ITEMS: Array<{ id: Exclude<ViewKey, 'mint'>; label: string; icon: typeof Home }> = [
+const PRIMARY_ITEMS: Array<{ id: Exclude<PrimaryView, 'mint'>; label: string; icon: typeof Home }> = [
   { id: 'floor', label: 'פיד', icon: Home },
   { id: 'market', label: 'מרקט', icon: ShoppingBag },
-  { id: 'warroom', label: 'דירוג', icon: Trophy },
   { id: 'profile', label: 'כספת', icon: UserRound },
-  { id: 'settings', label: 'הגדרות', icon: Settings },
 ];
 
 export default function Navigation({ view, onChange }: NavigationProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
 
   useEffect(() => {
@@ -48,68 +48,69 @@ export default function Navigation({ view, onChange }: NavigationProps) {
     setHasUnread((count ?? 0) > 0);
   };
 
+  const activeMainView: PrimaryView = view === 'market' || view === 'profile' || view === 'mint' ? view : 'floor';
+  const ActiveIcon = PRIMARY_ITEMS.find((item) => item.id === activeMainView)?.icon || Home;
+
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[80] flex justify-center px-3">
-      <nav className="pointer-events-auto w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#1C1C1E]/85 px-2 py-2 shadow-[0_20px_55px_rgba(0,0,0,0.7)] backdrop-blur-3xl">
-        <div className="grid grid-cols-6 items-center gap-0.5">
-          {SIDE_ITEMS.slice(0, 2).map((item) => {
-            const Icon = item.icon;
-            const active = view === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onChange(item.id)}
-                className="group flex flex-col items-center justify-center rounded-[1.3rem] px-1 py-1.5 transition-colors"
-              >
-                <span className={`${active ? 'text-[#0A84FF]' : 'text-white/65'} transition-colors`}>
-                  <Icon size={16} strokeWidth={2.2} />
-                </span>
-                <span className={`mt-1 text-[10px] font-semibold ${active ? 'text-white' : 'text-white/55'}`}>{item.label}</span>
-                <span
-                  className={`mt-1 h-[2px] w-5 rounded-full transition-all ${active ? 'bg-[#0A84FF] opacity-100' : 'bg-transparent opacity-0'}`}
-                />
-              </button>
-            );
-          })}
+    <div className="pointer-events-none fixed left-3 top-6 z-[90]">
+      <motion.nav layout className="pointer-events-auto w-[56px] overflow-hidden rounded-[1.8rem] border border-white/10 bg-[#1C1C1E]/88 shadow-[0_20px_55px_rgba(0,0,0,0.7)] backdrop-blur-3xl">
+        <button
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="relative flex h-14 w-14 items-center justify-center text-white transition active:scale-95"
+          aria-label="פתיחה וסגירה של תפריט"
+        >
+          {isOpen ? <X size={17} /> : <ActiveIcon size={17} />}
+          {!isOpen && hasUnread && activeMainView !== 'profile' && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-[#FF453A]" />}
+          <ChevronDown size={12} className={`absolute bottom-2 transition ${isOpen ? 'rotate-180 text-[#0A84FF]' : 'text-white/45'}`} />
+        </button>
 
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onChange('mint')}
-            className={`mx-auto flex h-11 w-11 flex-col items-center justify-center rounded-full border transition-all ${
-              view === 'mint'
-                ? 'border-[#0A84FF]/75 bg-[#0A84FF]/20 text-white shadow-[0_0_0_1px_rgba(10,132,255,0.35)]'
-                : 'border-white/20 bg-black/70 text-white/85'
-            }`}
-            aria-label="העלאה"
-          >
-            <Plus size={18} strokeWidth={2.5} />
-            <span className="mt-0.5 text-[9px] font-semibold">העלאה</span>
-          </motion.button>
-
-          {SIDE_ITEMS.slice(2).map((item) => {
-            const Icon = item.icon;
-            const active = view === item.id;
-            return (
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.16 }}
+              className="flex flex-col items-center gap-2 pb-3"
+            >
+              {PRIMARY_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const active = activeMainView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      onChange(item.id);
+                      setIsOpen(false);
+                    }}
+                    className={`relative grid h-10 w-10 place-items-center rounded-xl border transition ${
+                      active ? 'border-[#0A84FF]/45 bg-[#0A84FF]/18 text-white' : 'border-white/10 bg-black/35 text-white/70'
+                    }`}
+                    title={item.label}
+                  >
+                    <Icon size={16} />
+                    {item.id === 'profile' && hasUnread && !active && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#FF453A]" />}
+                  </button>
+                );
+              })}
               <button
-                key={item.id}
-                onClick={() => onChange(item.id)}
-                className="group relative flex flex-col items-center justify-center rounded-[1.3rem] px-1 py-1.5 transition-colors"
+                onClick={() => {
+                  onChange('mint');
+                  setIsOpen(false);
+                }}
+                className={`grid h-10 w-10 place-items-center rounded-xl border transition ${
+                  activeMainView === 'mint' || view === 'mint'
+                    ? 'border-[#0A84FF]/55 bg-[#0A84FF]/20 text-white'
+                    : 'border-white/10 bg-black/35 text-white/70'
+                }`}
+                title="העלאה"
               >
-                <span className={`${active ? 'text-[#0A84FF]' : 'text-white/65'} transition-colors`}>
-                  <Icon size={16} strokeWidth={2.2} />
-                </span>
-                {item.id === 'profile' && hasUnread && view !== 'profile' && (
-                  <span className="absolute right-3 top-2 h-2 w-2 rounded-full bg-[#FF453A] shadow-[0_0_12px_rgba(255,69,58,0.8)]" />
-                )}
-                <span className={`mt-1 text-[10px] font-semibold ${active ? 'text-white' : 'text-white/55'}`}>{item.label}</span>
-                <span
-                  className={`mt-1 h-[2px] w-5 rounded-full transition-all ${active ? 'bg-[#0A84FF] opacity-100' : 'bg-transparent opacity-0'}`}
-                />
+                <Plus size={16} />
               </button>
-            );
-          })}
-        </div>
-      </nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.nav>
     </div>
   );
 }

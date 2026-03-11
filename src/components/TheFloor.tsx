@@ -232,11 +232,6 @@ const AssetCard = ({ item, currentUser, inventory, setShowArsenal, handleShare, 
           </div>
         )}
 
-        <div className="pointer-events-auto absolute left-4 top-6 flex items-center gap-2 rounded-full border border-white/10 bg-[#1C1C1E]/85 px-3 py-1.5 backdrop-blur-3xl">
-          <Wallet size={14} className="text-[#0A84FF]" />
-          <DripCoinBadge amount={(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')} />
-        </div>
-
         <div className="absolute right-4 top-6 flex flex-col items-end gap-2">
           {viral && (
             <div className="flex items-center gap-1 rounded-full border border-[#FF453A]/35 bg-[#FF453A]/12 px-2.5 py-1 backdrop-blur-3xl">
@@ -701,22 +696,12 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden">
-      <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
-        <div className="glass-panel pointer-events-auto flex w-full max-w-xl items-center justify-between rounded-2xl px-3 py-2">
-          <div>
-            <p className="text-[10px] font-bold tracking-[0.16em] text-white/55">מנוע מסחר חי</p>
-            <p className="text-xs font-bold text-white">אלגוריתם דינמי בסגנון פיד מהיר</p>
+      <div className="pointer-events-none fixed left-[4.6rem] right-4 top-4 z-40">
+        <div className="pointer-events-auto flex items-center gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-[#1C1C1E]/80 p-1.5 backdrop-blur-3xl">
+          <div className="mr-1 flex items-center gap-1 rounded-xl border border-white/10 bg-black/35 px-2 py-1">
+            <Wallet size={12} className="text-[#0A84FF]" />
+            <DripCoinBadge amount={(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')} className="py-0.5" />
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="rounded-full border border-white/10 bg-black/45 px-2 py-1 text-white/75">
-              הייפ ממוצע {marketPulse.avgHype.toFixed(0)}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="pointer-events-none fixed inset-x-0 top-[5.4rem] z-40 flex justify-center px-4">
-        <div className="pointer-events-auto flex w-full max-w-xl items-center gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-[#1C1C1E]/80 p-1.5 backdrop-blur-3xl">
           {FEED_MODES.map((item) => (
             <button
               key={item}
@@ -729,12 +714,14 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
           <div className="mr-auto flex items-center gap-2 text-[11px] text-white/65">
             <span>שווי שוק {marketPulse.marketCap.toLocaleString('he-IL')}</span>
             <span className="h-1 w-1 rounded-full bg-white/30" />
+            <span>הייפ {marketPulse.avgHype.toFixed(0)}%</span>
+            <span className="h-1 w-1 rounded-full bg-white/30" />
             <span className="text-[#FF453A]">{marketPulse.viralCount} ויראליים</span>
           </div>
         </div>
       </div>
 
-      <div ref={containerRef} className="hide-scrollbar h-[100dvh] snap-y snap-mandatory overflow-y-scroll pt-[7.8rem]">
+      <div ref={containerRef} className="hide-scrollbar h-[100dvh] snap-y snap-mandatory overflow-y-scroll pt-[4.9rem]">
         {rankedAssets.map((item) => (
           <AssetCard
             key={item.asset.id}
@@ -757,7 +744,7 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 100, opacity: 0, scale: 0.95 }}
             transition={{ type: 'spring', damping: 24, stiffness: 210 }}
-            className="fixed bottom-[118px] left-4 right-4 z-50 flex h-44 flex-col overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#1C1C1E]/88 shadow-[0_24px_60px_rgba(0,0,0,0.78)] backdrop-blur-3xl"
+            className="fixed bottom-5 left-4 right-4 z-50 flex h-44 flex-col overflow-hidden rounded-[1.9rem] border border-white/10 bg-[#1C1C1E]/88 shadow-[0_24px_60px_rgba(0,0,0,0.78)] backdrop-blur-3xl"
           >
             <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-5 py-3">
               <span className="text-xs font-black text-white">ארסנל פעיל</span>
