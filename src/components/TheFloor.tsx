@@ -1,623 +1,662 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../supabase';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { 
-  Zap, TrendingUp, Clock, X, Loader2, Hexagon, Star, Crown, Wallet,
-  Backpack, Activity, Biohazard, Droplet, CloudFog, Magnet, ShieldCheck, 
-  Ghost, ChevronsDown, ShieldAlert, FileText, Target, Eye, Hourglass, Sparkles, Radio, Briefcase, Lock, Share2
-} from 'lucide-react';
+import { Activity, Flame, Loader2, Sparkles, TrendingUp, Wallet } from 'lucide-react';
+import { DripCoin } from './ui/DripCoin';
 
-// === מטבע ה-DRIP הרשמי המעוצב ===
-const DripCoin = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
-  <div className={`relative rounded-full bg-gradient-to-tr from-cyan-400 to-blue-600 p-[1px] shadow-[0_0_8px_rgba(34,211,238,0.6)] shrink-0 inline-flex align-middle ${className}`}>
-    <div className="w-full h-full bg-[#020202] rounded-full flex items-center justify-center overflow-hidden">
-      <span className="text-cyan-50 font-black italic tracking-tighter text-[40%] transform -rotate-12 select-none">
-        DRIP
-      </span>
-    </div>
-  </div>
-);
+type FeedMode = 'ai' | 'recent' | 'value';
 
-const POWERS_DICT: Record<number, any> = {
-  7: { name: 'שוגר ראש', icon: Droplet, color: 'text-pink-400', glow: 'drop-shadow-[0_0_8px_rgba(244,113,182,0.8)]' },
-  8: { name: 'מסך עשן', icon: CloudFog, color: 'text-slate-300', glow: 'drop-shadow-[0_0_8px_rgba(203,213,225,0.8)]' },
-  9: { name: 'שאיבת הייפ', icon: Magnet, color: 'text-fuchsia-400', glow: 'drop-shadow-[0_0_8px_rgba(217,70,239,0.8)]' },
-  4: { name: 'הזרקת הייפ', icon: Activity, color: 'text-rose-400', glow: 'drop-shadow-[0_0_8px_rgba(244,63,94,0.8)]' },
-  10: { name: 'מגן ניאון', icon: ShieldCheck, color: 'text-teal-400', glow: 'drop-shadow-[0_0_8px_rgba(45,212,191,0.8)]' },
-  1: { name: 'רוח רפאים', icon: Ghost, color: 'text-purple-400', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]' },
-  11: { name: 'הכפלת סיכון', icon: ChevronsDown, color: 'text-orange-400', glow: 'drop-shadow-[0_0_8px_rgba(251,146,60,0.8)]' },
-  2: { name: 'חומת מגן', icon: ShieldAlert, color: 'text-blue-400', glow: 'drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]' },
-  12: { name: 'מס קריפטו', icon: FileText, color: 'text-lime-400', glow: 'drop-shadow-[0_0_8px_rgba(163,230,53,0.8)]' },
-  13: { name: 'ניקוי זירה', icon: Target, color: 'text-sky-400', glow: 'drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]' },
-  5: { name: 'הרעלה', icon: Biohazard, color: 'text-emerald-400', glow: 'drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]' },
-  14: { name: 'מידע פנים', icon: Eye, color: 'text-indigo-400', glow: 'drop-shadow-[0_0_8px_rgba(129,140,248,0.8)]' },
-  15: { name: 'עיוות זמן', icon: Hourglass, color: 'text-violet-400', glow: 'drop-shadow-[0_0_8px_rgba(167,139,250,0.8)]' },
-  3: { name: 'לוויתן', icon: Sparkles, color: 'text-yellow-400', glow: 'drop-shadow-[0_0_8px_rgba(234,179,8,0.8)]' },
-  6: { name: 'פצצת EMP', icon: Radio, color: 'text-cyan-400', glow: 'drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]' },
-  16: { name: 'הסנדק', icon: Briefcase, color: 'text-red-500', glow: 'drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]' }
+interface DripUserRow {
+  id: string;
+  username: string | null;
+  avatar_url: string | null;
+  is_verified: boolean | null;
+  drip_coins: number | null;
+}
+
+interface DripAssetRow {
+  id: string;
+  title: string;
+  media_url: string;
+  owner_id: string | null;
+  creator_id: string | null;
+  current_value: number;
+  created_at: string;
+  last_takeover_at: string | null;
+  owner?: DripUserRow | null;
+  creator?: DripUserRow | null;
+}
+
+interface ComputedAsset extends DripAssetRow {
+  hype: number;
+  yieldPerSecond: number;
+  takeoverCount10m: number;
+  isViral: boolean;
+  isNew: boolean;
+  score: number;
+  nextPrice: number;
+}
+
+const TAKEOVER_MULTIPLIER = 1.2;
+const TAKEOVER_VIRAL_THRESHOLD = 3;
+const TAKEOVER_WINDOW_MS = 10 * 60 * 1000;
+const DISCOVERY_WINDOW_MS = 5 * 60 * 1000;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const isVideoAsset = (url: string) => {
+  const clean = url.split('?')[0]?.toLowerCase() ?? '';
+  return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.m4v');
 };
 
-const calculateHype = (asset: any) => {
-  const start = new Date(asset.last_takeover_at || asset.created_at).getTime();
-  const now = new Date().getTime();
-  let mins = Math.floor((now - start) / (1000 * 60));
-  if (asset.double_decay_until && new Date(asset.double_decay_until) > new Date()) mins *= 2;
-  if (asset.time_warp_until && new Date(asset.time_warp_until) > new Date()) return Math.min(100, 50 + mins);
-  return Math.max(5, 100 - mins);
+const getHype = (fromIso: string, nowMs: number) => {
+  const base = new Date(fromIso).getTime();
+  if (Number.isNaN(base)) return 100;
+  const minutesPassed = Math.floor((nowMs - base) / 60000);
+  return clamp(100 - minutesPassed, 0, 100);
 };
 
-const isVideo = (url: string) => ['mp4', 'mov', 'webm', 'quicktime'].includes(url.split('.').pop()?.toLowerCase() || '');
+const getYieldPerSecond = (value: number, hype: number, isViral: boolean) => {
+  const baseYield = value * 0.0001 * (hype / 100);
+  return isViral ? baseYield * 2 : baseYield;
+};
 
-// === כרטיסייה חכמה לכל נכס ===
-const AssetCard = ({ asset, index, currentUser, inventory, setShowArsenal, handleShare, handleTakeover, actionId, t, isHe }: any) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  
-  const [scale, setScale] = useState(1);
-  const [initialDist, setInitialDist] = useState(0);
+const formatNumber = (value: number) => Math.floor(value).toLocaleString('he-IL');
+const formatYield = (value: number) => value.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
-  const video = isVideo(asset.media_url);
-  const hype = calculateHype(asset);
-  const isMine = currentUser?.id === asset.owner_id;
-  const isCreatorPopular = asset.creator?.is_verified || (asset.creator?.drip_coins > 500000);
-  const activeValue = isCreatorPopular ? Math.floor(asset.current_value * 1.15) : asset.current_value;
+const getTimeAgoLabel = (iso: string, nowMs: number) => {
+  const createdMs = new Date(iso).getTime();
+  if (Number.isNaN(createdMs)) return 'עכשיו';
+  const diffMinutes = Math.max(0, Math.floor((nowMs - createdMs) / 60000));
+  if (diffMinutes <= 0) return 'עכשיו';
+  if (diffMinutes < 60) return `לפני ${diffMinutes} דק׳`;
+  const hours = Math.floor(diffMinutes / 60);
+  if (hours < 24) return `לפני ${hours} שע׳`;
+  const days = Math.floor(hours / 24);
+  return `לפני ${days} ימים`;
+};
 
-  const now = new Date();
-  const isSmoked = asset.smoked_until && new Date(asset.smoked_until) > now;
-  const isFrozen = asset.frozen_until && new Date(asset.frozen_until) > now;
-  const isGhosted = asset.ghosted_until && new Date(asset.ghosted_until) > now && !isMine;
-  const hasDoubleDecay = asset.double_decay_until && new Date(asset.double_decay_until) > now;
-  const hasTimeWarp = asset.time_warp_until && new Date(asset.time_warp_until) > now;
-  const isOwnerWhale = asset.owner?.whale_until && new Date(asset.owner.whale_until) > now;
-  const isOwnerGodfather = asset.owner?.godfather_until && new Date(asset.owner.godfather_until) > now;
-  const hasInsiderInfo = currentUser?.insider_until && new Date(currentUser.insider_until) > now;
+const buildDiscoveryFeed = (rankedAssets: ComputedAsset[]) => {
+  const discoveryPool = rankedAssets.filter((asset) => asset.isNew);
+  const establishedPool = rankedAssets.filter((asset) => !asset.isNew);
+  const targetDiscoveryCount = Math.min(discoveryPool.length, Math.floor(rankedAssets.length * 0.2));
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && videoRef.current) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.muted = false;
-        videoRef.current.play().catch(() => { if(videoRef.current) { videoRef.current.muted = true; videoRef.current.play(); } });
-      } else if (videoRef.current) { videoRef.current.pause(); }
-    }, { threshold: 0.6 });
-    if (cardRef.current) observer.observe(cardRef.current);
-    return () => { if (cardRef.current) observer.unobserve(cardRef.current); }
-  }, []);
+  if (targetDiscoveryCount === 0) return rankedAssets;
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.stopPropagation();
-      setInitialDist(Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY));
-    }
-  };
+  const selectedDiscovery = discoveryPool.slice(0, targetDiscoveryCount);
+  const remainingDiscovery = discoveryPool.slice(targetDiscoveryCount);
+  const mixed = [...establishedPool];
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.stopPropagation();
-      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      setScale(Math.max(1, Math.min(scale * (dist / initialDist), 4)));
-      setInitialDist(dist);
-    }
-  };
+  selectedDiscovery.forEach((asset, index) => {
+    const insertionIndex = Math.min(mixed.length, index * 5 + 1);
+    mixed.splice(insertionIndex, 0, asset);
+  });
 
-  const handleTouchEnd = () => setScale(1);
+  return [...mixed, ...remainingDiscovery];
+};
+
+interface FloorCardProps {
+  asset: ComputedAsset;
+  index: number;
+  total: number;
+  nowMs: number;
+  isMine: boolean;
+  canAfford: boolean;
+  isBusy: boolean;
+  onTakeover: (asset: ComputedAsset) => void;
+}
+
+function FloorCard({ asset, index, total, nowMs, isMine, canAfford, isBusy, onTakeover }: FloorCardProps) {
+  const mediaIsVideo = isVideoAsset(asset.media_url);
+  const ownerName = asset.owner?.username ?? 'בעלים לא זמין';
+  const ownerAvatar = asset.owner?.avatar_url ?? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(ownerName)}`;
+  const takeoverDisabled = isMine || !canAfford || isBusy;
 
   return (
-    <div ref={cardRef} className="w-full h-[100dvh] snap-always snap-start relative overflow-hidden bg-black shrink-0">
-      
-      {/* מדיה עם זום אצבעות */}
-      <motion.div 
-        className="absolute inset-0 w-full h-full origin-center z-0"
-        animate={{ scale }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {video ? (
-          <video ref={videoRef} src={asset.media_url} className={`w-full h-full object-cover transition-all duration-700 ${isSmoked ? 'blur-3xl grayscale-[80%]' : ''}`} playsInline loop />
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 36, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 130, damping: 24, mass: 0.8 }}
+      className="relative h-[100dvh] w-full snap-start snap-always overflow-hidden"
+    >
+      <div className="absolute inset-0">
+        {mediaIsVideo ? (
+          <video
+            src={asset.media_url}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="h-full w-full object-cover"
+          />
         ) : (
-          <img src={asset.media_url} className={`w-full h-full object-cover transition-all duration-700 ${isSmoked ? 'blur-3xl grayscale-[80%]' : ''}`} />
+          <img src={asset.media_url} alt={asset.title} className="h-full w-full object-cover" />
         )}
-      </motion.div>
+      </div>
 
-      {/* שכבת ממשק משתמש קבועה */}
-      <div className="absolute inset-0 pointer-events-none z-10">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/20" />
-        {isSmoked && <div className="absolute inset-0 flex items-center justify-center"><CloudFog size={100} className="text-white/30 animate-pulse" /></div>}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#02040a]/90 via-[#02040a]/45 to-[#02040a]/25" />
 
-        {/* אינדיקטורים עליונים */}
-        <div className="absolute top-28 right-4 flex flex-col gap-2">
-          {isOwnerGodfather && <div className="bg-red-500/20 border border-red-500/50 backdrop-blur-md px-2 py-1 rounded-full flex items-center gap-1"><Briefcase size={10} className="text-red-400"/><span className="text-[8px] font-black text-red-400 uppercase tracking-widest">Godfather</span></div>}
-          {hasInsiderInfo && asset.taxed_by && <div className="bg-lime-500/20 border border-lime-500/50 backdrop-blur-md px-2 py-1 rounded-full flex items-center gap-1 animate-pulse"><FileText size={10} className="text-lime-400"/><span className="text-[8px] font-black text-lime-400 uppercase tracking-widest">Tax Trap</span></div>}
+      <div className="absolute left-4 right-4 top-28 flex items-start justify-between">
+        <div className="rounded-2xl border border-white/15 bg-black/25 px-3 py-2 backdrop-blur-2xl">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/55">#{index + 1} / {total}</p>
+          <p className="mt-1 text-xs font-semibold text-white/85">{getTimeAgoLabel(asset.created_at, nowMs)}</p>
         </div>
 
-        {/* שעון טיימר (מופיע רק כשההייפ נמוך) - ממוקם מעל השם משתמש */}
-        {hype <= 20 && (
-          <div className="absolute bottom-[150px] right-4 flex flex-col items-center justify-center w-11 h-11 bg-red-500/20 border border-red-500/50 backdrop-blur-md rounded-full shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse z-20">
-            <Clock size={16} className="text-red-400 absolute opacity-30" />
-            <span className="text-[12px] font-black text-red-100 relative z-10 drop-shadow-md">{hype}m</span>
-          </div>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {asset.isNew && (
+            <span className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold tracking-[0.15em] text-white/90">
+              חדש
+            </span>
+          )}
+          {asset.isViral && (
+            <span className="flex items-center gap-1.5 rounded-full border border-amber-200/40 bg-amber-100/20 px-2.5 py-1 text-[10px] font-bold tracking-[0.14em] text-amber-100">
+              <Flame size={12} />
+              VIRAL x2
+            </span>
+          )}
+        </div>
+      </div>
 
-        {/* פרטי משתמש (ימין מעל הקפסולה) */}
-        <div className="absolute bottom-[95px] right-4 pointer-events-auto text-right max-w-[60%]" dir="rtl">
-          <div className="flex items-center gap-2.5 cursor-pointer justify-start" onClick={(e) => { e.stopPropagation(); window.location.hash = `user_${asset.owner_id}`; }}>
-            <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center overflow-hidden backdrop-blur-md shrink-0 shadow-lg ${isOwnerWhale ? 'border-yellow-400 bg-yellow-900/40' : 'bg-black/60 border-white/20'}`}>
-              {isGhosted ? <Ghost size={20} className="text-white/50" /> : asset.owner?.avatar_url ? <img src={asset.owner.avatar_url} className="w-full h-full object-cover" /> : <span className="text-lg">🧑🏽‍🚀</span>}
-            </div>
+      <div className="absolute bottom-6 left-4 right-4">
+        <div className="rounded-[30px] border border-white/15 bg-black/30 p-4 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center justify-start gap-1 mb-0.5">
-                <h2 className={`text-sm font-black truncate drop-shadow-md ${isOwnerWhale ? 'text-yellow-400' : 'text-white'}`}>{isGhosted ? 'GHOST' : asset.owner?.username}</h2>
-                {!isGhosted && asset.owner?.is_verified && <Hexagon size={14} className="text-cyan-400 fill-cyan-400/20 shrink-0" />}
-              </div>
-              <p className={`text-[11px] font-medium text-white/80 line-clamp-1 drop-shadow-md ${isSmoked ? 'blur-sm' : ''}`}>{asset.title}</p>
+              <p className="truncate text-lg font-black text-white">{asset.title}</p>
+              <button
+                onClick={() => {
+                  if (asset.owner_id) window.location.hash = `user_${asset.owner_id}`;
+                }}
+                className="mt-1 flex items-center gap-2 text-xs text-white/75 transition-colors hover:text-white"
+              >
+                <img src={ownerAvatar} alt={ownerName} className="h-6 w-6 rounded-full border border-white/20 object-cover" />
+                <span className="truncate">{ownerName}</span>
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">שווי נוכחי</p>
+              <p className="mt-1 flex items-center gap-1.5 text-sm font-black text-white">
+                {formatNumber(asset.current_value)}
+                <DripCoin className="h-4 w-4" />
+              </p>
             </div>
           </div>
-        </div>
 
-        {/* פעולות (שיתוף וארסנל - שמאל מעל הקפסולה) */}
-        <div className="absolute bottom-[95px] left-4 flex flex-col gap-4 items-center pointer-events-auto">
-          <button onClick={() => handleShare(asset)} className="w-11 h-11 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-white/90 hover:text-white hover:bg-white/20 transition-all shadow-lg active:scale-90">
-            <Share2 size={18} />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); setShowArsenal(asset.id); }} className="w-11 h-11 bg-black/50 backdrop-blur-md border border-white/20 rounded-full flex flex-col items-center justify-center gap-1 shadow-[0_0_15px_rgba(0,0,0,0.8)] active:scale-90 transition-transform hover:bg-white/20 relative">
-            <Backpack size={18} className="text-white drop-shadow-md" />
-            {inventory.length > 0 && <div className="absolute -top-1 -right-1 bg-cyan-500 text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-black shadow-[0_0_10px_rgba(34,211,238,0.8)]">{inventory.reduce((a:number,c:any)=>a+c.quantity,0)}</div>}
-          </button>
-        </div>
-
-        {/* הקפסולה התחתונה המאוחדת */}
-        <div className="absolute bottom-5 left-3 right-3 pointer-events-auto">
-          <div className="w-full bg-[#0a0a0a]/60 backdrop-blur-xl border border-white/10 rounded-3xl p-1.5 flex items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.8)]" dir="ltr">
-            
-            {/* צד שמאל: ארנק משתמש + DripCoin */}
-            <div className="flex items-center gap-2 px-3 py-2.5 bg-white/5 rounded-2xl shrink-0">
-              <Wallet size={14} className="text-cyan-400" />
-              <span className="text-white font-black text-[14px] flex items-center gap-1.5 tracking-wide">
-                {currentUser?.drip_coins?.toLocaleString() || 0} <DripCoin className="w-4 h-4" />
-              </span>
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-white/50">HYPE</p>
+              <p className="mt-1 text-sm font-bold text-white">{asset.hype}%</p>
             </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-white/50">Yield/sec</p>
+              <p className="mt-1 text-sm font-bold text-white">{formatYield(asset.yieldPerSecond)}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-white/50">10m</p>
+              <p className="mt-1 text-sm font-bold text-white">{asset.takeoverCount10m} השתלטויות</p>
+            </div>
+          </div>
 
-            {/* אמצע: מד הייפ ויוצר מובנים בתוך הקפסולה */}
-            <div className="flex-1 flex flex-col items-center justify-center px-2 min-w-0 gap-1.5" dir="rtl">
-              {asset.creator?.username && !isGhosted && (
-                <div className="flex items-center gap-1.5 justify-center w-full">
-                  <div className="w-4 h-4 rounded-full border border-cyan-400/50 flex items-center justify-center bg-cyan-500/10 shrink-0">
-                    <span className="text-[5px] font-black text-cyan-300 tracking-tighter transform -rotate-12">DRIP</span>
-                  </div>
-                  <span className="text-[9px] font-bold text-white/60 uppercase tracking-widest truncate max-w-[80px]">
-                    {asset.creator.username}
+          {isMine ? (
+            <div className="rounded-2xl border border-white/20 bg-white/10 py-4 text-center text-[11px] font-black uppercase tracking-[0.2em] text-white">
+              בבעלותך
+            </div>
+          ) : (
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01 }}
+              onClick={() => onTakeover(asset)}
+              disabled={takeoverDisabled}
+              className={`w-full rounded-2xl border py-3.5 px-4 text-left transition-all ${
+                takeoverDisabled
+                  ? 'border-white/15 bg-white/10 text-white/45'
+                  : 'border-white/70 bg-white text-[#04070d] shadow-[0_14px_40px_rgba(15,23,42,0.35)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-[0.25em]">השתלטות</span>
+                {isBusy ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <span className="flex items-center gap-1.5 text-[15px] font-black">
+                    {formatNumber(asset.current_value)}
+                    <DripCoin className="h-4 w-4" />
                   </span>
-                </div>
-              )}
-              {/* מד הייפ פנימי */}
-              <div className="flex items-center justify-center gap-1.5 w-full max-w-[100px]">
-                {hasDoubleDecay && <ChevronsDown size={10} className="text-orange-400 shrink-0" />}
-                {hasTimeWarp && <Hourglass size={10} className="text-violet-400 shrink-0" />}
-                <span className="text-[10px] font-black text-cyan-300 w-6 text-center shrink-0">{hype}%</span>
-                <div className="flex-1 h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
-                  <motion.div className="h-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" animate={{ width: `${hype}%` }} />
-                </div>
+                )}
               </div>
+              <div className="mt-1.5 flex items-center justify-end gap-1 text-[11px] font-semibold">
+                {canAfford ? (
+                  <>
+                    ×1.2: {formatNumber(asset.nextPrice)}
+                    <DripCoin className="h-3.5 w-3.5" />
+                  </>
+                ) : (
+                  'יתרה לא מספיקה'
+                )}
+              </div>
+            </motion.button>
+          )}
+        </div>
+      </div>
+    </motion.article>
+  );
+}
+
+export default function TheFloor() {
+  const [loading, setLoading] = useState(true);
+  const [assets, setAssets] = useState<DripAssetRow[]>([]);
+  const [takeoversByAsset, setTakeoversByAsset] = useState<Record<string, number>>({});
+  const [currentUser, setCurrentUser] = useState<DripUserRow | null>(null);
+  const [feedMode, setFeedMode] = useState<FeedMode>('ai');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id ?? null;
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const ticker = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(ticker);
+  }, []);
+
+  const loadCurrentUser = useCallback(async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+
+    if (!authData.user) {
+      setCurrentUser(null);
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('drip_users')
+      .select('id, username, avatar_url, is_verified, drip_coins')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (error) throw error;
+    const userRow = (data as DripUserRow | null) ?? null;
+    setCurrentUser(userRow);
+    return userRow;
+  }, []);
+
+  const fetchAssets = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('drip_assets')
+      .select(`
+        id,
+        title,
+        media_url,
+        owner_id,
+        creator_id,
+        current_value,
+        created_at,
+        last_takeover_at,
+        owner:drip_users!owner_id(id, username, avatar_url, is_verified, drip_coins),
+        creator:drip_users!creator_id(id, username, avatar_url, is_verified, drip_coins)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    setAssets((data as DripAssetRow[]) ?? []);
+  }, []);
+
+  const fetchTakeoverWindow = useCallback(async () => {
+    const sinceIso = new Date(Date.now() - TAKEOVER_WINDOW_MS).toISOString();
+    const { data, error } = await supabase
+      .from('drip_notifications')
+      .select('asset_id, created_at, type')
+      .eq('type', 'takeover')
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(600);
+
+    if (error) {
+      setTakeoversByAsset({});
+      return;
+    }
+
+    const grouped = ((data ?? []) as Array<{ asset_id: string | null }>).reduce<Record<string, number>>((acc, row) => {
+      if (!row.asset_id) return acc;
+      acc[row.asset_id] = (acc[row.asset_id] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    setTakeoversByAsset(grouped);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const bootstrap = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([loadCurrentUser(), fetchAssets(), fetchTakeoverWindow()]);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'טעינת הפיד נכשלה';
+        toast.error(message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    bootstrap();
+
+    const channel = supabase
+      .channel('floor-realtime-v2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drip_assets' }, () => {
+        void fetchAssets();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'drip_notifications' }, (payload) => {
+        const row = payload.new as { type?: string };
+        if (row?.type === 'takeover') {
+          void fetchTakeoverWindow();
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'drip_users' }, (payload) => {
+        const row = payload.new as { id?: string };
+        if (row?.id && row.id === currentUserIdRef.current) {
+          void loadCurrentUser();
+        }
+      })
+      .subscribe();
+
+    const takeoverPoll = window.setInterval(() => {
+      void fetchTakeoverWindow();
+    }, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(takeoverPoll);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchAssets, fetchTakeoverWindow, loadCurrentUser]);
+
+  const computedAssets = useMemo<ComputedAsset[]>(() => {
+    return assets.map((asset) => {
+      const sourceTime = asset.last_takeover_at ?? asset.created_at;
+      const createdMs = new Date(asset.created_at).getTime();
+      const ageMs = Number.isNaN(createdMs) ? 0 : Math.max(0, nowMs - createdMs);
+      const ageMinutes = Math.floor(ageMs / 60000);
+      const hype = getHype(sourceTime, nowMs);
+      const takeoverCount10m = takeoversByAsset[asset.id] ?? 0;
+      const isViral = takeoverCount10m >= TAKEOVER_VIRAL_THRESHOLD;
+      const isNew = ageMs <= DISCOVERY_WINDOW_MS;
+      const yieldPerSecond = getYieldPerSecond(asset.current_value, hype, isViral);
+
+      const valueSignal = Math.log10(Math.max(1, asset.current_value)) * 16;
+      const hypeSignal = hype * 0.48;
+      const momentumSignal = Math.min(40, takeoverCount10m * 11);
+      const freshnessSignal = isNew ? 18 : Math.max(0, 8 - ageMinutes * 0.12);
+      const viralSignal = isViral ? 35 : 0;
+      const score = valueSignal + hypeSignal + momentumSignal + freshnessSignal + viralSignal;
+
+      return {
+        ...asset,
+        hype,
+        takeoverCount10m,
+        isViral,
+        isNew,
+        yieldPerSecond,
+        score,
+        nextPrice: Math.floor(asset.current_value * TAKEOVER_MULTIPLIER),
+      };
+    });
+  }, [assets, nowMs, takeoversByAsset]);
+
+  const orderedAssets = useMemo(() => {
+    if (feedMode === 'recent') {
+      return [...computedAssets].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    if (feedMode === 'value') {
+      return [...computedAssets].sort((a, b) => b.current_value - a.current_value);
+    }
+
+    const ranked = [...computedAssets].sort((a, b) => b.score - a.score);
+    return buildDiscoveryFeed(ranked);
+  }, [computedAssets, feedMode]);
+
+  useEffect(() => {
+    setActiveIndex((prev) => {
+      if (orderedAssets.length === 0) return 0;
+      return Math.min(prev, orderedAssets.length - 1);
+    });
+  }, [orderedAssets.length]);
+
+  const onFeedScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || orderedAssets.length === 0) return;
+    const nextIndex = Math.round(container.scrollTop / Math.max(container.clientHeight, 1));
+    const safeIndex = clamp(nextIndex, 0, orderedAssets.length - 1);
+    setActiveIndex((prev) => (prev === safeIndex ? prev : safeIndex));
+  }, [orderedAssets.length]);
+
+  const ownedYieldPerSecond = useMemo(() => {
+    if (!currentUser) return 0;
+    return computedAssets
+      .filter((asset) => asset.owner_id === currentUser.id)
+      .reduce((sum, asset) => sum + asset.yieldPerSecond, 0);
+  }, [computedAssets, currentUser]);
+
+  const activeAsset = orderedAssets[activeIndex] ?? null;
+
+  const handleTakeover = useCallback(
+    async (asset: ComputedAsset) => {
+      if (!currentUser) {
+        toast.error('נדרש להתחבר מחדש כדי לבצע השתלטות');
+        return;
+      }
+      if (actionId) return;
+
+      setActionId(asset.id);
+
+      try {
+        const { data: freshAssetData, error: assetError } = await supabase
+          .from('drip_assets')
+          .select('id, owner_id, creator_id, current_value')
+          .eq('id', asset.id)
+          .single();
+
+        if (assetError) throw assetError;
+
+        const freshAsset = freshAssetData as { id: string; owner_id: string | null; creator_id: string | null; current_value: number } | null;
+        if (!freshAsset) throw new Error('הנכס לא נמצא');
+        if (freshAsset.owner_id === currentUser.id) throw new Error('הנכס כבר בבעלותך');
+
+        const takeoverPrice = Math.floor(freshAsset.current_value);
+        const nextPrice = Math.floor(takeoverPrice * TAKEOVER_MULTIPLIER);
+
+        const { data: buyerData, error: buyerError } = await supabase
+          .from('drip_users')
+          .select('drip_coins')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (buyerError) throw buyerError;
+        const buyerBalance = Number((buyerData as { drip_coins: number | null } | null)?.drip_coins ?? 0);
+        if (buyerBalance < takeoverPrice) throw new Error('אין מספיק יתרה בארנק');
+
+        const creditUser = async (userId: string, amount: number) => {
+          if (amount <= 0) return;
+          const { data: creditTargetData, error: creditReadError } = await supabase
+            .from('drip_users')
+            .select('drip_coins')
+            .eq('id', userId)
+            .single();
+
+          if (creditReadError) throw creditReadError;
+
+          const currentCoins = Number((creditTargetData as { drip_coins: number | null } | null)?.drip_coins ?? 0);
+          const { error: creditWriteError } = await supabase
+            .from('drip_users')
+            .update({ drip_coins: currentCoins + amount })
+            .eq('id', userId);
+
+          if (creditWriteError) throw creditWriteError;
+        };
+
+        const royaltyCut = Math.floor(takeoverPrice * 0.05);
+        const ownerCut = takeoverPrice - royaltyCut;
+
+        if (freshAsset.owner_id) {
+          await creditUser(freshAsset.owner_id, ownerCut);
+        }
+
+        if (freshAsset.creator_id && freshAsset.creator_id !== freshAsset.owner_id) {
+          await creditUser(freshAsset.creator_id, royaltyCut);
+        }
+
+        const { error: debitError } = await supabase
+          .from('drip_users')
+          .update({ drip_coins: buyerBalance - takeoverPrice })
+          .eq('id', currentUser.id);
+
+        if (debitError) throw debitError;
+
+        const { error: takeoverError } = await supabase
+          .from('drip_assets')
+          .update({
+            owner_id: currentUser.id,
+            current_value: nextPrice,
+            last_takeover_at: new Date().toISOString(),
+          })
+          .eq('id', freshAsset.id);
+
+        if (takeoverError) throw takeoverError;
+
+        setCurrentUser((prev) => (prev ? { ...prev, drip_coins: buyerBalance - takeoverPrice } : prev));
+        toast.success('ההשתלטות הושלמה בהצלחה');
+        await Promise.all([fetchAssets(), fetchTakeoverWindow(), loadCurrentUser()]);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'הפעולה נכשלה';
+        toast.error(message);
+      } finally {
+        setActionId(null);
+      }
+    },
+    [actionId, currentUser, fetchAssets, fetchTakeoverWindow, loadCurrentUser],
+  );
+
+  if (loading) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-[#04070d]">
+        <Loader2 size={34} className="animate-spin text-white/75" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-[100dvh] overflow-hidden bg-[#04070d] text-white" dir="rtl">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-24 left-1/2 h-80 w-[90vw] -translate-x-1/2 rounded-full bg-cyan-500/10 blur-[120px]" />
+        <div className="absolute bottom-[-120px] left-1/2 h-80 w-[90vw] -translate-x-1/2 rounded-full bg-slate-300/10 blur-[140px]" />
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 160, damping: 22 }}
+        className="pointer-events-none fixed left-1/2 top-5 z-40 w-[min(94vw,860px)] -translate-x-1/2"
+      >
+        <div className="pointer-events-auto rounded-[28px] border border-white/20 bg-black/30 p-2.5 backdrop-blur-3xl shadow-[0_20px_45px_rgba(0,0,0,0.3)]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <Activity size={14} className="text-white/80" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">Live Floor</span>
             </div>
 
-            {/* צד ימין: כפתור השתלטות + DripCoin */}
-            <div className="shrink-0" dir="rtl">
-              {isMine ? (
-                <div className="bg-white/10 text-white px-5 py-2.5 rounded-2xl flex items-center justify-center border border-white/10">
-                  <span className="text-[11px] uppercase font-black tracking-widest">{t.yours}</span>
-                </div>
-              ) : isFrozen ? (
-                <div className="bg-blue-900/40 text-blue-200 px-5 py-2.5 rounded-2xl flex items-center gap-1.5 border border-blue-500/30">
-                  <Lock size={14} />
-                  <span className="text-[11px] uppercase font-black tracking-widest">{t.frozen}</span>
-                </div>
-              ) : (
-                <button 
-                  onClick={(e) => handleTakeover(asset, activeValue, e)} 
-                  disabled={actionId === asset.id || currentUser?.drip_coins < activeValue} 
-                  className={`px-4 py-2.5 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 border ${
-                    actionId === asset.id ? 'bg-cyan-400 border-cyan-400 text-black' : 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-500/30'
+            <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+              {[
+                { key: 'ai' as const, label: 'אלגוריתם', icon: Sparkles },
+                { key: 'recent' as const, label: 'חדש', icon: Activity },
+                { key: 'value' as const, label: 'שווי', icon: TrendingUp },
+              ].map((mode) => (
+                <button
+                  key={mode.key}
+                  onClick={() => setFeedMode(mode.key)}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-bold tracking-[0.16em] transition-all ${
+                    feedMode === mode.key ? 'bg-white text-black' : 'text-white/70 hover:bg-white/10'
                   }`}
                 >
-                  {actionId === asset.id ? <Loader2 size={16} className="animate-spin text-cyan-400" /> : (
-                    <>
-                      <span className="text-[10px] uppercase font-bold tracking-wider">{t.takeover}</span>
-                      <span className="font-black text-[14px] flex items-center gap-1.5">
-                        {activeValue.toLocaleString()} <DripCoin className="w-4 h-4" />
-                      </span>
-                    </>
-                  )}
+                  <mode.icon size={12} />
+                  {mode.label}
                 </button>
-              )}
+              ))}
             </div>
 
+            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <Wallet size={14} className="text-white/80" />
+              <div className="text-right leading-tight">
+                <p className="text-[10px] text-white/50">ארנק</p>
+                <p className="flex items-center gap-1 text-xs font-black">
+                  {formatNumber(currentUser?.drip_coins ?? 0)}
+                  <DripCoin className="h-3.5 w-3.5" />
+                </p>
+              </div>
+              <div className="h-5 w-px bg-white/20" />
+              <div className="text-right leading-tight">
+                <p className="text-[10px] text-white/50">Yield/דקה</p>
+                <p className="flex items-center gap-1 text-xs font-black">
+                  {formatYield(ownedYieldPerSecond * 60)}
+                  <DripCoin className="h-3.5 w-3.5" />
+                </p>
+              </div>
+            </div>
           </div>
         </div>
+      </motion.div>
 
-      </div>
-    </div>
-  );
-};
-export default function TheFloor() {
-  const isHe = navigator.language.startsWith('he');
-  const [assets, setAssets] = useState<any[]>([]);
-  const [originalAssets, setOriginalAssets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionId, setActionId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'trending' | 'recent'>('recent');
-  
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [inventory, setInventory] = useState<any[]>([]);
-  const [showArsenal, setShowArsenal] = useState<string | null>(null);
+      {orderedAssets.length === 0 ? (
+        <div className="flex h-full items-center justify-center px-6">
+          <div className="rounded-[28px] border border-white/15 bg-black/30 px-8 py-10 text-center backdrop-blur-3xl">
+            <p className="text-sm font-semibold text-white/80">אין כרגע נכסים להצגה בפיד</p>
+          </div>
+        </div>
+      ) : (
+        <div ref={containerRef} onScroll={onFeedScroll} className="h-full snap-y snap-mandatory overflow-y-scroll no-scrollbar">
+          <AnimatePresence initial={false}>
+            {orderedAssets.map((asset, index) => {
+              const balance = currentUser?.drip_coins ?? 0;
+              return (
+                <FloorCard
+                  key={asset.id}
+                  asset={asset}
+                  index={index}
+                  total={orderedAssets.length}
+                  nowMs={nowMs}
+                  isMine={asset.owner_id === currentUser?.id}
+                  canAfford={balance >= asset.current_value}
+                  isBusy={actionId === asset.id}
+                  onTakeover={handleTakeover}
+                />
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
 
-  // משתני Swipe - החלקת אצבע ימינה ושמאלה
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const t = {
-    he: { title: 'דריפ', takeover: 'השתלטות', trending: 'חם', recent: 'חדש', yours: 'הנכס שלך', arsenal: 'ארסנל', frozen: 'מוגן' },
-    en: { title: 'DRIP', takeover: 'TAKE OVER', trending: 'HOT', recent: 'NEW', yours: 'YOUR ASSET', arsenal: 'ARSENAL', frozen: 'FROZEN' }
-  }[isHe ? 'he' : 'en'];
-
-  // חסימת זום דיפולטיבי של הדפדפן (Zoom/Pinch) - כדי שהזום המותאם שלנו יעבוד!
-  useEffect(() => {
-    const preventDefaultZoom = (e: TouchEvent) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener('touchmove', preventDefaultZoom, { passive: false });
-    return () => document.removeEventListener('touchmove', preventDefaultZoom);
-  }, []);
-
-  useEffect(() => {
-    loadUser();
-    fetchAssets();
-    const channel = supabase.channel('floor-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'drip_assets' }, () => fetchAssets())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'drip_inventory' }, () => fetchInventory())
-      .subscribe();
-    const hypeInterval = setInterval(() => setAssets(prev => [...prev]), 60000);
-    return () => { supabase.removeChannel(channel); clearInterval(hypeInterval); };
-  }, [filter]);
-
-  const loadUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase.from('drip_users').select('*').eq('id', user.id).single();
-      setCurrentUser(data);
-      fetchInventory(user.id);
-    }
-  };
-
-  const fetchInventory = async (userId = currentUser?.id) => {
-    if (!userId) return;
-    const { data } = await supabase.from('drip_inventory').select('*').eq('user_id', userId).gt('quantity', 0);
-    if (data) setInventory(data);
-  };
-
-  const fetchAssets = async () => {
-    let query = supabase.from('drip_assets').select('*, owner:drip_users!owner_id(username, avatar_url, is_verified, drip_coins, godfather_until), creator:drip_users!creator_id(username, is_verified, drip_coins)');
-    if (filter === 'recent') query = query.order('created_at', { ascending: false });
-    else query = query.order('current_value', { ascending: false });
-    const { data } = await query;
-    if (data) {
-      setOriginalAssets(data);
-      setAssets(data);
-    }
-    setLoading(false);
-  };
-
-  // גלילה אינסופית
-  useEffect(() => {
-    const handleScroll = () => {
-      if (!containerRef.current) return;
-      const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-      if (scrollTop + clientHeight >= scrollHeight - 100) setAssets(prev => [...prev, ...originalAssets]);
-    };
-    const container = containerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      return () => container.removeEventListener('scroll', handleScroll);
-    }
-  }, [originalAssets]);
-
-  // לוגיקת החלקה (Swipe)
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
-
-  const onTouchEndHandler = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isSwipe = Math.abs(distance) > 75; // רגישות החלקה
-
-    if (isSwipe) {
-      setFilter(prev => prev === 'recent' ? 'trending' : 'recent');
-    }
-  };
-
-  const handleShare = async (asset: any) => {
-    try {
-      await navigator.share({
-        title: `${asset.title} - DRIP`,
-        text: `Check out this asset on DRIP! Owned by ${asset.owner?.username}`,
-        url: window.location.href,
-      });
-    } catch (err) {
-      toast.success(isHe ? "הקישור הועתק" : "Link copied");
-    }
-  };
-
-  const handleUsePower = async (powerId: number, asset: any) => {
-    setShowArsenal(null);
-    const invItem = inventory.find(i => i.power_id === powerId);
-    if (!invItem || invItem.quantity < 1) return toast.error(isHe ? "אין לך את הכוח הזה במלאי" : "Not in inventory");
-
-    try {
-      setInventory(prev => prev.map(i => i.id === invItem.id ? { ...i, quantity: i.quantity - 1 } : i));
-      const newQuantity = invItem.quantity - 1;
-      if (newQuantity > 0) await supabase.from('drip_inventory').update({ quantity: newQuantity }).eq('id', invItem.id);
-      else await supabase.from('drip_inventory').delete().eq('id', invItem.id);
-
-      const now = new Date();
-      const { data: targetAsset } = await supabase.from('drip_assets').select('*, owner:owner_id(godfather_until)').eq('id', asset.id).single();
-      
-      const isGodfather = targetAsset?.owner?.godfather_until && new Date(targetAsset.owner.godfather_until) > now;
-      const hasNeonShield = targetAsset?.neon_shield_until && new Date(targetAsset.neon_shield_until) > now;
-
-      const checkImmunity = () => {
-         if (isGodfather) { toast.error("הבעלים הוא הסנדק! חסין להתקפות 💼", { icon: '💼' }); return true; }
-         if (hasNeonShield) { 
-            supabase.from('drip_assets').update({ neon_shield_until: null }).eq('id', asset.id).then();
-            toast.success("מגן הניאון של הנכס שבר את ההתקפה! 🛡️"); 
-            return true; 
-         }
-         return false;
-      };
-
-      if (powerId === 7) { 
-        const cTime = new Date(targetAsset.last_takeover_at || targetAsset.created_at);
-        await supabase.from('drip_assets').update({ last_takeover_at: new Date(cTime.getTime() + 3*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("שוגר ראש! +5% הייפ 🍬", { icon: '🍬' });
-      }
-      else if (powerId === 8) { 
-        if(checkImmunity()) return fetchAssets();
-        await supabase.from('drip_assets').update({ smoked_until: new Date(now.getTime() + 30*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("מסך עשן הופעל! 🌫️", { icon: '🌫️' });
-      }
-      else if (powerId === 9) { 
-        if(checkImmunity()) return fetchAssets();
-        const cTime = new Date(targetAsset.last_takeover_at || targetAsset.created_at);
-        await supabase.from('drip_assets').update({ last_takeover_at: new Date(cTime.getTime() - 6*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("שאבת 10% הייפ! 🧲", { icon: '🧲' });
-      }
-      else if (powerId === 4) { 
-        await supabase.from('drip_assets').update({ last_takeover_at: now.toISOString() }).eq('id', targetAsset.id);
-        toast.success("הייפ במקסימום! 🚀", { icon: '🔥' });
-      }
-      else if (powerId === 10) { 
-        await supabase.from('drip_assets').update({ neon_shield_until: new Date(now.getTime() + 24*60*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("מגן ניאון הופעל על הנכס! 🛡️", { icon: '🛡️' });
-      }
-      else if (powerId === 1) { 
-        await supabase.from('drip_assets').update({ ghosted_until: new Date(now.getTime() + 24*60*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("רוח רפאים - אתה מוסתר! 👻", { icon: '👻' });
-      }
-      else if (powerId === 11) { 
-        if(checkImmunity()) return fetchAssets();
-        await supabase.from('drip_assets').update({ double_decay_until: new Date(now.getTime() + 60*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("הכפלת סיכון! ההייפ צונח כפול ⏬", { icon: '⏬' });
-      }
-      else if (powerId === 2) { 
-        await supabase.from('drip_assets').update({ frozen_until: new Date(now.getTime() + 60*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("חומת מגן! ננעל להשתלטות! 🔒", { icon: '🔒' });
-      }
-      else if (powerId === 12) { 
-        if(checkImmunity()) return fetchAssets();
-        await supabase.from('drip_assets').update({ taxed_by: currentUser.id }).eq('id', targetAsset.id);
-        toast.success("מס קריפטו הוטמן! אחוזים מובטחים 💸", { icon: '💸' });
-      }
-      else if (powerId === 13) { 
-        const { data: cheapest } = await supabase.from('drip_assets').select('*').neq('owner_id', currentUser.id).order('current_value', { ascending: true }).limit(1).single();
-        if (cheapest) {
-           toast.success("ניקוי זירה! מסתער על נכס... 🧹", { icon: '🧹' });
-           handleTakeover(cheapest, cheapest.current_value, null); 
-           return;
-        }
-      }
-      else if (powerId === 5) { 
-        if(checkImmunity()) return fetchAssets();
-        await supabase.from('drip_assets').update({ current_value: Math.floor(targetAsset.current_value * 0.85) }).eq('id', targetAsset.id);
-        toast.success("הנכס הורעל! ☠️", { icon: '🧪' });
-      }
-      else if (powerId === 14) { 
-        await supabase.from('drip_users').update({ insider_until: new Date(now.getTime() + 60*60000).toISOString() }).eq('id', currentUser.id);
-        toast.success("מידע פנים הופעל לשעה! 👁️", { icon: '👁️' });
-      }
-      else if (powerId === 15) { 
-        await supabase.from('drip_assets').update({ time_warp_until: new Date(now.getTime() + 60*60000).toISOString() }).eq('id', targetAsset.id);
-        toast.success("עיוות זמן! ההייפ עולה במקום לרדת ⏳", { icon: '⏳' });
-      }
-      else if (powerId === 3) { 
-        await supabase.from('drip_users').update({ whale_until: new Date(now.getTime() + 24*60*60000).toISOString() }).eq('id', currentUser.id);
-        toast.success("סטטוס לוויתן מופעל! ✨", { icon: '✨' });
-      }
-      else if (powerId === 6) { 
-        toast.success("EMP! כאוס בזירה! 📻", { icon: '📻' });
-        assets.forEach(async (a) => {
-           if (a.id !== targetAsset.id) {
-             const tTime = new Date(a.last_takeover_at || a.created_at);
-             await supabase.from('drip_assets').update({ last_takeover_at: new Date(tTime.getTime() - 12*60000).toISOString() }).eq('id', a.id);
-           }
-        });
-      }
-      else if (powerId === 16) { 
-        await supabase.from('drip_users').update({ godfather_until: new Date(now.getTime() + 24*60*60000).toISOString() }).eq('id', currentUser.id);
-        toast.success("הסנדק! אתה חסין להכל 💼", { icon: '💼' });
-      }
-      fetchAssets();
-    } catch (err: any) {
-      toast.error(err.message);
-      fetchInventory();
-    }
-  };
-
-  const handleTakeover = async (asset: any, activeValue: number, e: React.MouseEvent | null) => {
-    if (e) e.stopPropagation();
-    if (actionId) return;
-    
-    if (asset.frozen_until && new Date(asset.frozen_until) > new Date()) return toast.error(isHe ? "הנכס מוגן באמצעות חומת מגן 🛡️" : "Asset is frozen! 🛡️");
-    
-    setActionId(asset.id);
-
-    try {
-      if (!currentUser) throw new Error("Login required");
-
-      const { data: freshAsset } = await supabase.from('drip_assets').select('*, owner:owner_id(godfather_until)').eq('id', asset.id).single();
-      if (!freshAsset) throw new Error("Asset not found");
-      if (currentUser.id === freshAsset.owner_id) throw new Error(isHe ? "הנכס כבר בבעלותך" : "Already yours");
-      if (freshAsset.owner?.godfather_until && new Date(freshAsset.owner.godfather_until) > new Date()) throw new Error("הבעלים הוא הסנדק! אי אפשר להשתלט 💼");
-
-      const { data: buyer } = await supabase.from('drip_users').select('drip_coins').eq('id', currentUser.id).single();
-      if (!buyer || buyer.drip_coins < activeValue) throw new Error(isHe ? "אין לך מספיק 💧" : "Not enough 💧");
-
-      const nextPrice = Math.floor(activeValue * 1.2);
-      const royalties = Math.floor(activeValue * 0.05);
-      let ownerCut = activeValue - royalties;
-
-      if (freshAsset.taxed_by && freshAsset.taxed_by !== currentUser.id) {
-         const tax = Math.floor(activeValue * 0.10);
-         ownerCut -= tax;
-         const { data: taxer } = await supabase.from('drip_users').select('drip_coins').eq('id', freshAsset.taxed_by).single();
-         if (taxer) await supabase.from('drip_users').update({ drip_coins: taxer.drip_coins + tax }).eq('id', freshAsset.taxed_by);
-         toast.success("שילמת מס קריפטו למישהו שהטמין מלכודת!", { icon: '💸' });
-      }
-
-      setCurrentUser((prev: any) => ({ ...prev, drip_coins: prev.drip_coins - activeValue }));
-      
-      if (freshAsset.owner_id) {
-        const { data: oldOwner } = await supabase.from('drip_users').select('drip_coins').eq('id', freshAsset.owner_id).single();
-        if (oldOwner) await supabase.from('drip_users').update({ drip_coins: oldOwner.drip_coins + ownerCut }).eq('id', freshAsset.owner_id);
-      }
-
-      if (freshAsset.creator_id && freshAsset.creator_id !== freshAsset.owner_id) {
-        const { data: creator } = await supabase.from('drip_users').select('drip_coins').eq('id', freshAsset.creator_id).single();
-        if (creator) await supabase.from('drip_users').update({ drip_coins: creator.drip_coins + royalties }).eq('id', freshAsset.creator_id);
-      }
-
-      await supabase.from('drip_users').update({ drip_coins: buyer.drip_coins - activeValue }).eq('id', currentUser.id);
-      await supabase.from('drip_assets').update({ owner_id: currentUser.id, current_value: nextPrice, last_takeover_at: new Date().toISOString(), frozen_until: null, smoked_until: null, taxed_by: null, neon_shield_until: null, ghosted_until: null, double_decay_until: null, time_warp_until: null }).eq('id', asset.id);
-
-      toast.success(isHe ? "השתלטות מוצלחת! הנכס שלך." : "TAKEOVER SUCCESSFUL", { icon: '⚡' });
-      fetchAssets();
-    } catch (err: any) { 
-      toast.error(err.message); 
-      fetchAssets(); 
-    } finally { 
-      setActionId(null); 
-    }
-  };
-
-  if (loading) return null;
-
-  return (
-    <div 
-      className="w-full h-[100dvh] bg-black overflow-hidden flex flex-col font-sans relative" 
-      dir={isHe ? 'rtl' : 'ltr'}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEndHandler}
-      style={{ touchAction: 'pan-y' }}
-    >
-      {/* תפריט עליון - חם | חדש גבוה, אלגנטי ומרווח */}
-      <div className="fixed top-12 left-0 right-0 z-40 flex items-center justify-center gap-6 pointer-events-none">
-        <button 
-          onClick={() => setFilter('recent')} 
-          className={`pointer-events-auto text-[20px] font-black uppercase tracking-widest transition-all duration-300 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] ${filter === 'recent' ? 'text-white scale-110' : 'text-white/40 hover:text-white/80'}`}
+      {activeAsset && (
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 150, damping: 23 }}
+          className="pointer-events-none fixed bottom-6 left-1/2 z-40 w-[min(92vw,560px)] -translate-x-1/2"
         >
-          {t.recent}
-        </button>
-        <span className="text-white/20 text-2xl font-light drop-shadow-md">|</span>
-        <button 
-          onClick={() => setFilter('trending')} 
-          className={`pointer-events-auto text-[20px] font-black uppercase tracking-widest transition-all duration-300 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] ${filter === 'trending' ? 'text-white scale-110' : 'text-white/40 hover:text-white/80'}`}
-        >
-          {t.trending}
-        </button>
-      </div>
-
-      {/* פיד מסך מלא */}
-      <div ref={containerRef} className="flex-1 overflow-y-scroll snap-y snap-mandatory no-scrollbar h-[100dvh] w-full">
-        {assets.map((asset, index) => (
-          <AssetCard 
-            key={`${asset.id}-${index}`}
-            asset={asset}
-            index={index}
-            currentUser={currentUser}
-            inventory={inventory}
-            setShowArsenal={setShowArsenal}
-            handleShare={handleShare}
-            handleTakeover={handleTakeover}
-            actionId={actionId}
-            t={t}
-            isHe={isHe}
-          />
-        ))}
-      </div>
-
-      {/* תפריט ארסנל (Floating Dock) צף מעל הקפסולה */}
-      <AnimatePresence>
-        {showArsenal && (
-          <motion.div 
-            initial={{ y: 100, opacity: 0, scale: 0.9 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 100, opacity: 0, scale: 0.9 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed bottom-[110px] left-4 right-4 h-40 bg-[#0a0a0a]/90 backdrop-blur-3xl z-50 rounded-3xl border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden"
-          >
-            <div className="flex justify-between items-center px-5 py-3 border-b border-white/5 bg-white/5">
-              <span className="text-xs font-black uppercase tracking-widest text-cyan-400 flex items-center gap-2"><Backpack size={14}/> {t.arsenal}</span>
-              <button onClick={() => setShowArsenal(null)} className="text-white/50 hover:text-white bg-black/50 p-1.5 rounded-full"><X size={14}/></button>
+          <div className="flex items-center justify-between rounded-2xl border border-white/15 bg-black/35 px-4 py-3 backdrop-blur-3xl">
+            <p className="truncate text-xs font-semibold text-white/85">{activeAsset.title}</p>
+            <div className="ml-4 flex items-center gap-3">
+              <span className="text-[11px] font-semibold text-white/70">HYPE {activeAsset.hype}%</span>
+              <span className="text-[11px] font-semibold text-white/70">Yield {formatYield(activeAsset.yieldPerSecond)}/s</span>
             </div>
-            
-            <div className="flex-1 overflow-x-auto flex items-center gap-3 px-5 no-scrollbar snap-x">
-              {inventory.length === 0 ? (
-                <div className="w-full text-center text-[10px] font-bold text-white/30 uppercase tracking-widest">{isHe ? 'הארסנל ריק' : 'ARSENAL EMPTY'}</div>
-              ) : (
-                inventory.map((item, idx) => {
-                  const power = POWERS_DICT[item.power_id];
-                  if (!power) return null;
-                  return (
-                    <motion.div 
-                      key={item.id}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      onClick={() => handleUsePower(item.power_id, assets.find(a=>a.id===showArsenal))}
-                      className="shrink-0 snap-center w-24 h-24 bg-[#111] border border-white/5 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-white/5 hover:border-cyan-500/30 transition-all group"
-                    >
-                      <power.icon size={22} className={`${power.color} group-hover:scale-110 transition-transform ${power.glow}`} />
-                      <div className="text-center">
-                        <h3 className="text-[9px] font-black text-white uppercase">{power.name}</h3>
-                        <p className="text-[8px] font-bold text-cyan-400">x{item.quantity}</p>
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
