@@ -1,2 +1,2 @@
-export { DripCoinIcon } from './DripCoinIcon';
-export { default } from './DripCoinIcon';
+export { DripCoinBadge } from './DripCoinBadge';
+export { default } from './DripCoinBadge';

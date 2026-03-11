@@ -7,7 +7,7 @@ type LooseRecord = Record<string, any>;
 type ChatLine = {
   id: string;
   text: string;
-  time: string;
+  time: number;
   source: 'system' | 'me';
 };
 
@@ -15,7 +15,7 @@ type ChatProps = {
   userId?: string | null;
 };
 
-const formatTime = (value: string) => new Date(value).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+const formatTime = (value: number) => new Date(value).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 
 export default function Chat({ userId }: ChatProps) {
   const [value, setValue] = useState('');
@@ -47,8 +47,8 @@ export default function Chat({ userId }: ChatProps) {
     const lines: ChatLine[] =
       data?.map((item: LooseRecord) => ({
         id: item.id,
-        text: `נכס ${item.title || 'ללא שם'} כרגע אצל ${item.owner?.username || 'משתמש'}`,
-        time: formatTime(item.last_takeover_at || item.created_at),
+        text: `נכס ${item.title || 'ללא שם'} כרגע בבעלות ${item.owner?.username || 'משתמש'}`,
+        time: new Date(item.last_takeover_at || item.created_at).getTime(),
         source: 'system',
       })) ?? [];
 
@@ -56,7 +56,7 @@ export default function Chat({ userId }: ChatProps) {
   };
 
   const lines = useMemo(() => {
-    return [...systemLines, ...localLines].sort((a, b) => a.time.localeCompare(b.time));
+    return [...systemLines, ...localLines].sort((a, b) => a.time - b.time);
   }, [systemLines, localLines]);
 
   const sendLocalMessage = () => {
@@ -67,7 +67,7 @@ export default function Chat({ userId }: ChatProps) {
       {
         id: `${nowIso}-${Math.random().toString(16).slice(2)}`,
         text: value.trim(),
-        time: formatTime(nowIso),
+        time: new Date(nowIso).getTime(),
         source: 'me',
       },
     ]);
@@ -75,10 +75,10 @@ export default function Chat({ userId }: ChatProps) {
   };
 
   return (
-    <article className="rounded-[1.7rem] border border-white/10 bg-[#111111]/76 p-4 backdrop-blur-3xl">
+    <article className="glass-panel rounded-[2rem] p-4">
       <div className="mb-2 flex items-center gap-2">
-        <MessageSquare size={16} className="text-[#E5E7EB]/75" />
-        <h2 className="text-lg font-semibold text-[#E5E7EB]">צ׳אט מסחר</h2>
+        <MessageSquare size={16} className="text-[#0A84FF]" />
+        <h2 className="text-lg font-semibold text-white">צ׳אט מסחר</h2>
       </div>
       <div className="hide-scrollbar mb-2 max-h-44 space-y-2 overflow-y-auto pr-1">
         {lines.map((line) => (
@@ -86,28 +86,28 @@ export default function Chat({ userId }: ChatProps) {
             key={line.id}
             className={`rounded-xl border px-3 py-2 text-xs ${
               line.source === 'me'
-                ? 'border-[#007AFF]/35 bg-[#007AFF]/14 text-[#E5E7EB]'
-                : 'border-white/10 bg-black/30 text-[#E5E7EB]/85'
+                ? 'border-[#0A84FF]/35 bg-[#0A84FF]/14 text-white'
+                : 'border-white/10 bg-black/30 text-white/85'
             }`}
           >
             <p>{line.text}</p>
-            <p className="mt-1 text-[10px] text-[#E5E7EB]/52">{line.time}</p>
+            <p className="mt-1 text-[10px] text-white/52">{formatTime(line.time)}</p>
           </div>
         ))}
-        {lines.length === 0 && <p className="text-xs text-[#E5E7EB]/52">אין הודעות כרגע</p>}
+        {lines.length === 0 && <p className="text-xs text-white/52">אין הודעות כרגע</p>}
       </div>
       <div className="flex items-center gap-2">
         <input
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder="כתוב הודעה קצרה"
-          className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm text-[#E5E7EB] outline-none transition focus:border-[#007AFF]/55"
+          className="w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm text-white outline-none transition focus:border-[#0A84FF]/55"
           disabled={!userId}
         />
         <button
           onClick={sendLocalMessage}
           disabled={!userId}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#007AFF]/45 bg-[#007AFF]/14 text-[#E5E7EB] transition hover:bg-[#007AFF]/25 disabled:border-white/10 disabled:bg-black/35 disabled:text-[#E5E7EB]/35"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#0A84FF]/45 bg-[#0A84FF]/14 text-white transition hover:bg-[#0A84FF]/25 disabled:border-white/10 disabled:bg-black/35 disabled:text-white/35"
           aria-label="שליחה"
         >
           <Send size={14} />

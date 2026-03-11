@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
-import { Activity } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Activity, Flame, ShieldAlert } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { DripCoinIcon } from './DripCoinIcon';
+import { DripCoinBadge } from './DripCoinBadge';
 
 type LooseRecord = Record<string, any>;
 
@@ -39,22 +39,31 @@ export default function WarRoom() {
 
   if (loading) {
     return (
-      <div className="grid h-full place-items-center text-sm text-[#E5E7EB]/65">
-        טוען את הדירוג...
+      <div className="grid h-full place-items-center text-sm text-white/65">
+        טוען את הדירוג החי...
       </div>
     );
   }
 
+  const stats = useMemo(() => {
+    const total = leaders.reduce((sum, user) => sum + (user.drip_coins ?? 0), 0);
+    const avg = leaders.length ? total / leaders.length : 0;
+    const whales = leaders.filter((user) => (user.drip_coins ?? 0) > avg * 2).length;
+    return { total, avg, whales };
+  }, [leaders]);
+
   return (
-    <section className="h-full overflow-y-auto px-4 pb-32 pt-6">
-      <div className="mx-auto w-full max-w-md">
-        <header className="mb-4 rounded-[1.9rem] border border-white/10 bg-[#111111]/78 p-4 backdrop-blur-3xl">
-          <h1 className="text-2xl font-semibold text-[#E5E7EB]">חמ״ל דירוג</h1>
-          <p className="mt-2 text-xs text-[#E5E7EB]/58">טבלת עוצמה חיה עם עדכון רציף של בעלי הון בזירה.</p>
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#007AFF]/35 bg-[#007AFF]/12 px-3 py-1.5 text-[11px] font-semibold text-[#E5E7EB]">
-            יתרה אישית
-            <span>{(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')}</span>
-            <DripCoinIcon />
+    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-32 pt-5">
+      <div className="mx-auto w-full max-w-xl space-y-4 px-4">
+        <header className="glass-panel rounded-[2rem] p-4">
+          <h1 className="text-2xl font-black text-white">לוח עוצמה חי</h1>
+          <p className="mt-2 text-xs text-white/58">דירוג דינמי שמתעדכן כל שינוי מאזן בזמן אמת.</p>
+          <div className="mt-3 flex items-center justify-between">
+            <DripCoinBadge amount={(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')} />
+            <div className="text-right text-[11px] text-white/60">
+              <p>סה״כ שווי הלוח: {stats.total.toLocaleString('he-IL')}</p>
+              <p>לווייתנים פעילים: {stats.whales}</p>
+            </div>
           </div>
         </header>
 
@@ -63,6 +72,7 @@ export default function WarRoom() {
             const rank = index + 1;
             const isMe = currentUser?.id === user.id;
             const isLeader = rank === 1;
+            const isDanger = rank > 1 && (leaders[0]?.drip_coins ?? 0) - (user.drip_coins ?? 0) < 1000;
             return (
               <motion.button
                 key={user.id}
@@ -75,18 +85,14 @@ export default function WarRoom() {
                 }}
                 className={`flex w-full items-center gap-3 rounded-[1.2rem] border p-3 text-right backdrop-blur-3xl transition ${
                   isMe
-                    ? 'border-[#007AFF]/45 bg-[#007AFF]/10'
+                    ? 'border-[#0A84FF]/45 bg-[#0A84FF]/10'
                     : isLeader
-                      ? 'border-[#D4AF37]/35 bg-[#111111]/82'
-                      : 'border-white/10 bg-[#111111]/75 hover:border-white/20'
+                      ? 'border-[#0A84FF]/50 bg-[#1C1C1E]/85'
+                      : 'border-white/10 bg-[#1C1C1E]/75 hover:border-white/20'
                 }`}
               >
-                <div className="w-7 text-center text-base font-semibold text-[#E5E7EB]/75">{rank}</div>
-                <div
-                  className={`h-10 w-10 shrink-0 overflow-hidden rounded-full border ${
-                    isLeader ? 'border-[#D4AF37]/45' : 'border-white/20'
-                  } bg-black/40`}
-                >
+                <div className="w-7 text-center text-base font-semibold text-white/75">{rank}</div>
+                <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-full border ${isLeader ? 'border-[#0A84FF]/45' : 'border-white/20'} bg-black/40`}>
                   {user.avatar_url ? (
                     <img src={user.avatar_url} className="h-full w-full object-cover" alt={user.username || 'משתמש'} />
                   ) : (
@@ -95,14 +101,19 @@ export default function WarRoom() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className={`truncate text-sm font-semibold ${isMe ? 'text-[#E5E7EB]' : 'text-[#E5E7EB]/90'}`}>{user.username || 'ללא שם'}</p>
-                    {isLeader && <span className="h-1.5 w-1.5 rounded-full bg-[#D4AF37]" />}
+                    <p className={`truncate text-sm font-semibold ${isMe ? 'text-white' : 'text-white/90'}`}>{user.username || 'ללא שם'}</p>
+                    {isLeader && <Flame size={12} className="text-[#FF453A]" />}
                   </div>
-                  {isMe && <p className="mt-0.5 text-[10px] font-semibold text-[#007AFF]">החשבון שלך</p>}
+                  {isMe && <p className="mt-0.5 text-[10px] font-semibold text-[#0A84FF]">החשבון שלך</p>}
+                  {isDanger && !isLeader && (
+                    <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-[#FF453A]">
+                      <ShieldAlert size={10} />
+                      קרוב לפסגה
+                    </p>
+                  )}
                 </div>
-                <div className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2 py-1 text-[11px] font-semibold text-[#E5E7EB]">
-                  {(user.drip_coins ?? 0).toLocaleString('he-IL')}
-                  <DripCoinIcon />
+                <div className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2 py-1 text-[11px] font-semibold text-white">
+                  <DripCoinBadge amount={(user.drip_coins ?? 0).toLocaleString('he-IL')} className="py-0.5" />
                 </div>
               </motion.button>
             );
@@ -110,13 +121,13 @@ export default function WarRoom() {
         </div>
 
         {leaders.length === 0 && (
-          <div className="mt-8 rounded-[1.2rem] border border-white/10 bg-[#111111]/75 p-4 text-center text-sm text-[#E5E7EB]/55">
+          <div className="mt-8 rounded-[1.2rem] border border-white/10 bg-[#111111]/75 p-4 text-center text-sm text-white/55">
             אין נתונים כרגע
           </div>
         )}
 
-        <div className="mt-6 mb-2 flex items-center justify-center gap-2 text-[11px] font-medium text-[#E5E7EB]/50">
-          <Activity size={13} className="text-[#007AFF]" />
+        <div className="mb-2 mt-6 flex items-center justify-center gap-2 text-[11px] font-medium text-white/50">
+          <Activity size={13} className="text-[#0A84FF]" />
           העדכון פועל בזמן אמת
         </div>
       </div>

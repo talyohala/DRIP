@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
-import { Building2, Loader2, Upload } from 'lucide-react';
+import { Loader2, Upload } from 'lucide-react';
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { DripCoinIcon } from './DripCoinIcon';
+import { DripCoinBadge } from './DripCoinBadge';
 
 type MintProps = {
   onMinted: () => void;
@@ -126,29 +126,21 @@ export default function Mint({ onMinted }: MintProps) {
   };
 
   return (
-    <section className="h-full overflow-y-auto px-4 pb-32 pt-6">
-      <div className="mx-auto w-full max-w-md space-y-4">
-        <header className="rounded-[1.9rem] border border-white/10 bg-[#111111]/78 p-4 backdrop-blur-3xl">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-2.5 py-1">
-            <Building2 size={13} className="text-[#E5E7EB]/80" />
-            <span className="text-[10px] font-semibold text-[#E5E7EB]/70">סטודיו הנפקת מסחר</span>
-          </div>
-          <h1 className="text-2xl font-semibold text-[#E5E7EB]">הנפקת נכס חדשה</h1>
-          <p className="mt-2 text-xs leading-relaxed text-[#E5E7EB]/58">
-            מסך הנפקה בתצורת דסק מקצועי: העלאת מדיה, כותרת מדויקת והנפקה מיידית לערך פתיחה קבוע.
-          </p>
-          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#007AFF]/30 bg-[#007AFF]/12 px-3 py-1.5 text-[11px] font-semibold text-[#E5E7EB]">
-            ערך פתיחה
-            <span>500</span>
-            <DripCoinIcon />
+    <section className="hide-scrollbar h-[100dvh] overflow-y-auto pb-32 pt-5">
+      <div className="mx-auto w-full max-w-xl space-y-4 px-4">
+        <header className="glass-panel rounded-[2rem] p-4">
+          <h1 className="text-2xl font-black text-white">סטודיו הנפקה</h1>
+          <p className="mt-2 text-xs leading-relaxed text-white/60">העלה תוכן, תייג מדויק, והכנס את הנכס ישירות לכלכלת DRIP בזמן אמת.</p>
+          <div className="mt-3">
+            <DripCoinBadge amount={500} />
           </div>
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="group relative block overflow-hidden rounded-[1.8rem] border border-dashed border-white/20 bg-[#111111]/75 p-4 backdrop-blur-3xl">
+          <label className="group relative block overflow-hidden rounded-[2rem] border border-dashed border-white/20 bg-[#1C1C1E]/80 p-4 backdrop-blur-3xl">
             <input type="file" accept="image/*,video/*" onChange={handleFileChange} className="absolute inset-0 z-20 cursor-pointer opacity-0" />
             {previewUrl ? (
-              <div className="relative overflow-hidden rounded-[1.3rem] border border-white/15">
+              <div className="relative overflow-hidden rounded-[1.5rem] border border-white/15">
                 {isVideo ? (
                   <video src={previewUrl} controls className="max-h-[340px] w-full bg-black object-contain" />
                 ) : (
@@ -160,7 +152,7 @@ export default function Mint({ onMinted }: MintProps) {
               </div>
             ) : (
               <div className="space-y-3 py-9 text-center">
-                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-white/20 bg-[#020202]">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-white/20 bg-black">
                   <Upload size={24} className="text-[#E5E7EB]/85" />
                 </div>
                 <p className="text-sm font-semibold text-[#E5E7EB]">העלה קובץ להנפקה</p>
@@ -169,14 +161,14 @@ export default function Mint({ onMinted }: MintProps) {
             )}
           </label>
 
-          <div className="rounded-[1.8rem] border border-white/10 bg-[#111111]/78 p-4 backdrop-blur-3xl">
+          <div className="glass-panel rounded-[2rem] p-4">
             <label className="mb-2 block text-[11px] font-semibold text-[#E5E7EB]/62">שם הנכס</label>
             <input
               type="text"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="לדוגמה: מניית פרימיום דיגיטלית"
-              className="w-full rounded-[1.1rem] border border-white/12 bg-black/35 px-4 py-3 text-sm font-medium text-[#E5E7EB] outline-none transition focus:border-[#007AFF]/55"
+              placeholder="לדוגמה: גל נזילות יומי"
+              className="w-full rounded-2xl border border-white/12 bg-black/35 px-4 py-3 text-sm font-medium text-[#E5E7EB] outline-none transition focus:border-[#0A84FF]/55"
             />
           </div>
 
@@ -186,7 +178,7 @@ export default function Mint({ onMinted }: MintProps) {
             whileTap={{ scale: 0.98 }}
             disabled={isSubmitting}
             type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-[1.2rem] border border-[#007AFF]/50 bg-[#007AFF]/18 px-4 py-3 text-sm font-semibold text-[#E5E7EB] transition hover:bg-[#007AFF]/24 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#0A84FF]/50 bg-[#0A84FF]/18 px-4 py-3 text-sm font-semibold text-[#E5E7EB] transition hover:bg-[#0A84FF]/24 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
             {isSubmitting ? 'הנפקה מתבצעת' : 'הנפק לזירה'}
