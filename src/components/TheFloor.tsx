@@ -34,7 +34,7 @@ import {
 } from 'react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { DripCoinIcon } from './DripCoin';
+import { DripCoinIcon } from './DripCoinIcon';
 
 type LooseRecord = Record<string, any>;
 
@@ -42,7 +42,6 @@ type PowerDefinition = {
   name: string;
   icon: LucideIcon;
   color: string;
-  glow: string;
 };
 
 type AssetCardProps = {
@@ -65,22 +64,22 @@ type AssetCardProps = {
 };
 
 const POWERS_DICT: Record<number, PowerDefinition> = {
-  7: { name: 'שוגר ראש', icon: Sparkles, color: 'text-pink-300', glow: 'drop-shadow-[0_0_8px_rgba(249,168,212,0.9)]' },
-  8: { name: 'מסך עשן', icon: CloudFog, color: 'text-slate-200', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.9)]' },
-  9: { name: 'שאיבת הייפ', icon: Magnet, color: 'text-fuchsia-300', glow: 'drop-shadow-[0_0_8px_rgba(240,171,252,0.9)]' },
-  4: { name: 'הזרקת הייפ', icon: Activity, color: 'text-rose-300', glow: 'drop-shadow-[0_0_8px_rgba(253,164,175,0.9)]' },
-  10: { name: 'מגן ניאון', icon: ShieldCheck, color: 'text-emerald-300', glow: 'drop-shadow-[0_0_8px_rgba(110,231,183,0.9)]' },
-  1: { name: 'רוח רפאים', icon: Ghost, color: 'text-violet-300', glow: 'drop-shadow-[0_0_8px_rgba(196,181,253,0.9)]' },
-  11: { name: 'הכפלת סיכון', icon: ChevronsDown, color: 'text-amber-300', glow: 'drop-shadow-[0_0_8px_rgba(252,211,77,0.9)]' },
-  2: { name: 'חומת מגן', icon: ShieldAlert, color: 'text-sky-300', glow: 'drop-shadow-[0_0_8px_rgba(125,211,252,0.9)]' },
-  12: { name: 'מס קריפטו', icon: FileText, color: 'text-lime-300', glow: 'drop-shadow-[0_0_8px_rgba(190,242,100,0.9)]' },
-  13: { name: 'ניקוי זירה', icon: Target, color: 'text-cyan-300', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.9)]' },
-  5: { name: 'הרעלה', icon: Biohazard, color: 'text-emerald-300', glow: 'drop-shadow-[0_0_8px_rgba(110,231,183,0.9)]' },
-  14: { name: 'מידע פנים', icon: Eye, color: 'text-indigo-300', glow: 'drop-shadow-[0_0_8px_rgba(165,180,252,0.9)]' },
-  15: { name: 'עיוות זמן', icon: Hourglass, color: 'text-violet-300', glow: 'drop-shadow-[0_0_8px_rgba(196,181,253,0.9)]' },
-  3: { name: 'לוויתן', icon: Sparkles, color: 'text-yellow-300', glow: 'drop-shadow-[0_0_8px_rgba(253,224,71,0.9)]' },
-  6: { name: 'פצצת EMP', icon: Radio, color: 'text-cyan-300', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.9)]' },
-  16: { name: 'הסנדק', icon: Briefcase, color: 'text-rose-300', glow: 'drop-shadow-[0_0_8px_rgba(253,164,175,0.9)]' },
+  7: { name: 'שוגר ראש', icon: Sparkles, color: 'text-[#007AFF]' },
+  8: { name: 'מסך עשן', icon: CloudFog, color: 'text-[#FF3B30]' },
+  9: { name: 'שאיבת הייפ', icon: Magnet, color: 'text-[#FF3B30]' },
+  4: { name: 'הזרקת הייפ', icon: Activity, color: 'text-[#007AFF]' },
+  10: { name: 'מגן ניאון', icon: ShieldCheck, color: 'text-[#007AFF]' },
+  1: { name: 'רוח רפאים', icon: Ghost, color: 'text-[#E5E7EB]' },
+  11: { name: 'הכפלת סיכון', icon: ChevronsDown, color: 'text-[#FF3B30]' },
+  2: { name: 'חומת מגן', icon: ShieldAlert, color: 'text-[#007AFF]' },
+  12: { name: 'מס קריפטו', icon: FileText, color: 'text-[#FF3B30]' },
+  13: { name: 'ניקוי זירה', icon: Target, color: 'text-[#E5E7EB]' },
+  5: { name: 'הרעלה', icon: Biohazard, color: 'text-[#FF3B30]' },
+  14: { name: 'מידע פנים', icon: Eye, color: 'text-[#007AFF]' },
+  15: { name: 'עיוות זמן', icon: Hourglass, color: 'text-[#E5E7EB]' },
+  3: { name: 'לוויתן', icon: Sparkles, color: 'text-[#E5E7EB]' },
+  6: { name: 'פצצת EMP', icon: Radio, color: 'text-[#FF3B30]' },
+  16: { name: 'הסנדק', icon: Briefcase, color: 'text-[#D4AF37]' },
 };
 
 const calculateHype = (asset: LooseRecord) => {
@@ -177,9 +176,10 @@ const AssetCard = ({
   };
 
   const handleTouchEnd = () => setScale(1);
+  const totalInventory = inventory.reduce((acc: number, item: LooseRecord) => acc + item.quantity, 0);
 
   return (
-    <div ref={cardRef} className="relative h-[100dvh] w-full shrink-0 snap-start snap-always overflow-hidden bg-[#050505]">
+    <div ref={cardRef} className="relative h-[100dvh] w-full shrink-0 snap-start snap-always overflow-hidden bg-[#020202]">
       <motion.div
         className="absolute inset-0 z-0 h-full w-full origin-center"
         animate={{ scale }}
@@ -192,54 +192,53 @@ const AssetCard = ({
           <video
             ref={videoRef}
             src={asset.media_url}
-            className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[70%] blur-2xl' : ''}`}
+            className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[85%] blur-2xl' : ''}`}
             playsInline
             loop
           />
         ) : (
           <img
             src={asset.media_url}
-            className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[70%] blur-2xl' : ''}`}
+            className={`h-full w-full object-cover transition-all duration-700 ${isSmoked ? 'grayscale-[85%] blur-2xl' : ''}`}
             alt={asset.title || 'נכס'}
           />
         )}
       </motion.div>
 
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/25 to-black/25" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#020202]/95 via-[#020202]/25 to-[#020202]/32" />
+
         {isSmoked && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <CloudFog size={100} className="animate-pulse text-white/25" />
+            <CloudFog size={98} className="animate-pulse text-white/15" />
           </div>
         )}
 
-        <div className="pointer-events-auto absolute left-4 top-6 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.65)] backdrop-blur-2xl">
-          <Wallet size={14} className="text-cyan-300" />
-          <span className="text-[12px] font-black text-white">{(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')}</span>
-          <DripCoinIcon className="h-4" />
+        <div className="pointer-events-auto absolute left-4 top-6 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#111111]/70 px-3 py-1.5 backdrop-blur-3xl">
+          <Wallet size={14} className="text-[#E5E7EB]/80" />
+          <span className="text-[11px] font-semibold text-[#E5E7EB]">{(currentUser?.drip_coins ?? 0).toLocaleString('he-IL')}</span>
+          <DripCoinIcon className="h-auto" />
         </div>
 
-        <div className="absolute right-4 top-20 flex flex-col gap-2">
+        <div className="absolute right-4 top-6 flex flex-col items-end gap-2">
           {isOwnerGodfather && (
-            <div className="flex items-center gap-1 rounded-full border border-rose-300/35 bg-rose-300/10 px-2 py-1 backdrop-blur-2xl">
-              <Briefcase size={10} className="text-rose-200" />
-              <span className="text-[8px] font-black tracking-widest text-rose-100">הסנדק</span>
+            <div className="flex items-center gap-1 rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1 backdrop-blur-3xl">
+              <Briefcase size={10} className="text-[#D4AF37]" />
+              <span className="text-[9px] font-semibold text-[#E5E7EB]">הסנדק</span>
             </div>
           )}
           {hasInsiderInfo && asset.taxed_by && (
-            <div className="animate-pulse rounded-full border border-lime-300/35 bg-lime-300/10 px-2 py-1 backdrop-blur-2xl">
-              <span className="flex items-center gap-1 text-[8px] font-black tracking-widest text-lime-100">
-                <FileText size={10} className="text-lime-200" />
-                מלכודת מס
-              </span>
+            <div className="flex items-center gap-1 rounded-full border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-2.5 py-1 backdrop-blur-3xl">
+              <FileText size={10} className="text-[#FF3B30]" />
+              <span className="text-[9px] font-semibold text-[#E5E7EB]">מלכודת מס</span>
             </div>
           )}
         </div>
 
         {hype <= 20 && (
-          <div className="absolute bottom-[172px] left-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-rose-300/35 bg-rose-400/15 shadow-[0_0_20px_rgba(244,114,182,0.4)] backdrop-blur-2xl">
-            <Clock size={14} className="absolute text-rose-200/30" />
-            <span className="relative z-10 text-[11px] font-black text-rose-50">{hype}ד</span>
+          <div className="absolute bottom-[168px] left-4 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-[#FF3B30]/35 bg-[#111111]/70 backdrop-blur-3xl">
+            <Clock size={12} className="absolute text-[#FF3B30]/35" />
+            <span className="relative z-10 text-[10px] font-semibold text-[#E5E7EB]">{hype}ד</span>
           </div>
         )}
 
@@ -248,104 +247,106 @@ const AssetCard = ({
             onClick={() => {
               void handleShare(asset);
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/[0.02] text-white/90 shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-2xl transition-all hover:border-cyan-200/45 hover:text-cyan-100 active:scale-95"
+            className="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-[#111111]/68 text-[#E5E7EB]/85 backdrop-blur-3xl transition-all hover:border-[#007AFF]/35 hover:text-[#E5E7EB]"
             aria-label="שיתוף"
           >
-            <Share2 size={18} />
+            <Share2 size={16} />
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               setShowArsenal(asset.id);
             }}
-            className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/[0.02] text-white shadow-[0_10px_30px_rgba(0,0,0,0.55)] backdrop-blur-2xl transition-all hover:border-emerald-200/40 hover:text-emerald-100 active:scale-95"
+            className="relative grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-[#111111]/68 text-[#E5E7EB]/85 backdrop-blur-3xl transition-all hover:border-[#007AFF]/35 hover:text-[#E5E7EB]"
             aria-label="ארסנל"
           >
-            <Backpack size={18} />
-            {inventory.length > 0 && (
-              <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-black/60 bg-cyan-300 text-[9px] font-black text-black shadow-[0_0_10px_rgba(34,211,238,0.7)]">
-                {inventory.reduce((a: number, c: LooseRecord) => a + c.quantity, 0)}
+            <Backpack size={16} />
+            {totalInventory > 0 && (
+              <div className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full border border-black/70 bg-[#007AFF] text-[8px] font-semibold text-white">
+                {totalInventory}
               </div>
             )}
           </button>
         </div>
 
-        <div className="pointer-events-auto absolute bottom-20 left-3 right-3">
-          <div className="flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/[0.02] px-3 py-2 shadow-[0_24px_55px_rgba(0,0,0,0.78)] backdrop-blur-2xl">
-            <div className="min-w-0 flex flex-1 items-center gap-2">
-              <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border ${
-                  isOwnerWhale ? 'border-yellow-300/60 bg-yellow-300/20' : 'border-white/20 bg-black/40'
-                }`}
-              >
-                {isGhosted ? (
-                  <Ghost size={16} className="text-white/60" />
-                ) : asset.owner?.avatar_url ? (
-                  <img src={asset.owner.avatar_url} className="h-full w-full object-cover" alt={asset.owner?.username || 'בעלים'} />
-                ) : (
-                  <span className="text-sm">🧑🏽‍🚀</span>
-                )}
-              </div>
+        <div className="pointer-events-auto absolute bottom-[88px] left-3 right-3 z-30">
+          <div className="rounded-[1.8rem] border border-white/10 bg-[#111111]/72 px-3 py-2.5 shadow-[0_20px_55px_rgba(0,0,0,0.72)] backdrop-blur-3xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex flex-1 items-center gap-2">
+                <div
+                  className={`grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full border ${
+                    isOwnerWhale ? 'border-[#D4AF37]/45 bg-[#D4AF37]/10' : 'border-white/20 bg-black/30'
+                  }`}
+                >
+                  {isGhosted ? (
+                    <Ghost size={15} className="text-[#E5E7EB]/55" />
+                  ) : asset.owner?.avatar_url ? (
+                    <img src={asset.owner.avatar_url} className="h-full w-full object-cover" alt={asset.owner?.username || 'בעלים'} />
+                  ) : (
+                    <span className="text-xs">🧑🏽‍🚀</span>
+                  )}
+                </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="mb-0.5 flex items-center gap-1">
-                  <span className={`truncate text-[12px] font-black ${isOwnerWhale ? 'text-yellow-200' : 'text-white'}`}>
-                    {isGhosted ? 'מוסתר' : asset.owner?.username || 'בעלים לא ידוע'}
-                  </span>
-                  {!isGhosted && asset.owner?.is_verified && <Hexagon size={11} className="shrink-0 fill-cyan-300/20 text-cyan-300" />}
-                </div>
-                <div className="mb-1 flex items-center gap-1.5 text-[9px] text-white/55">
-                  <span className="truncate">{asset.title}</span>
-                  {hasDoubleDecay && <ChevronsDown size={10} className="text-amber-300" />}
-                  {hasTimeWarp && <Hourglass size={10} className="text-violet-300" />}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-black text-cyan-200">{hype}%</span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full border border-white/10 bg-black/50">
-                    <motion.div
-                      className="h-full bg-gradient-to-r from-emerald-300 via-cyan-300 to-yellow-300 shadow-[0_0_10px_rgba(34,211,238,0.75)]"
-                      animate={{ width: `${hype}%` }}
-                    />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center gap-1">
+                    <span className="truncate text-[12px] font-semibold text-[#E5E7EB]">
+                      {isGhosted ? 'מוסתר' : asset.owner?.username || 'בעלים לא ידוע'}
+                    </span>
+                    {!isGhosted && asset.owner?.is_verified && <Hexagon size={10} className="shrink-0 fill-[#007AFF]/20 text-[#007AFF]" />}
+                  </div>
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[9px] text-[#E5E7EB]/55">
+                    <span className="truncate">{asset.title}</span>
+                    {hasDoubleDecay && <ChevronsDown size={10} className="text-[#FF3B30]" />}
+                    {hasTimeWarp && <Hourglass size={10} className="text-[#E5E7EB]/75" />}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-semibold ${hype <= 20 ? 'text-[#FF3B30]' : 'text-[#E5E7EB]/75'}`}>{hype}%</span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full border border-white/10 bg-black/40">
+                      <motion.div
+                        className={`h-full ${hype <= 20 ? 'bg-[#FF3B30]' : 'bg-[#007AFF]'}`}
+                        animate={{ width: `${hype}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="shrink-0">
-              {isMine ? (
-                <div className="flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 py-2">
-                  <span className="text-[10px] font-black text-white/90">{labels.yours}</span>
-                </div>
-              ) : isFrozen ? (
-                <div className="flex items-center gap-1.5 rounded-full border border-sky-300/35 bg-sky-300/12 px-4 py-2 text-sky-100">
-                  <Lock size={13} />
-                  <span className="text-[10px] font-black">{labels.frozen}</span>
-                </div>
-              ) : (
-                <button
-                  onClick={(e) => {
-                    void handleTakeover(asset, activeValue, e);
-                  }}
-                  disabled={actionId === asset.id || (currentUser?.drip_coins ?? 0) < activeValue}
-                  className={`flex rounded-full border px-3 py-2 transition-all active:scale-95 ${
-                    actionId === asset.id
-                      ? 'border-cyan-300 bg-cyan-300 text-black'
-                      : 'border-cyan-300/35 bg-cyan-300/15 text-cyan-100 hover:bg-cyan-300/25'
-                  }`}
-                >
-                  {actionId === asset.id ? (
-                    <Loader2 size={16} className="animate-spin text-cyan-800" />
-                  ) : (
-                    <div className="flex flex-col items-start leading-tight">
-                      <span className="text-[9px] font-bold">{labels.takeover}</span>
-                      <span className="flex items-center gap-1.5 text-[12px] font-black">
-                        {activeValue.toLocaleString('he-IL')}
-                        <DripCoinIcon className="h-4" />
-                      </span>
-                    </div>
-                  )}
-                </button>
-              )}
+              <div className="shrink-0">
+                {isMine ? (
+                  <div className="rounded-full border border-white/15 bg-white/5 px-4 py-2">
+                    <span className="text-[10px] font-semibold text-[#E5E7EB]/85">{labels.yours}</span>
+                  </div>
+                ) : isFrozen ? (
+                  <div className="flex items-center gap-1.5 rounded-full border border-[#007AFF]/35 bg-[#007AFF]/10 px-3.5 py-2 text-[#E5E7EB]">
+                    <Lock size={12} />
+                    <span className="text-[10px] font-semibold">{labels.frozen}</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      void handleTakeover(asset, activeValue, e);
+                    }}
+                    disabled={actionId === asset.id || (currentUser?.drip_coins ?? 0) < activeValue}
+                    className={`rounded-full border px-3 py-1.5 transition-all active:scale-95 ${
+                      actionId === asset.id
+                        ? 'border-[#007AFF] bg-[#007AFF] text-white'
+                        : 'border-[#007AFF]/45 bg-[#007AFF]/12 text-[#E5E7EB] hover:bg-[#007AFF]/20'
+                    }`}
+                  >
+                    {actionId === asset.id ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <div className="flex flex-col items-start leading-tight">
+                        <span className="text-[9px] font-semibold">{labels.takeover}</span>
+                        <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold">
+                          {activeValue.toLocaleString('he-IL')}
+                          <DripCoinIcon className="h-auto" />
+                        </span>
+                      </div>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -735,7 +736,7 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
 
   if (loading) {
     return (
-      <div className="grid h-[100dvh] w-full place-items-center bg-[#050505] text-sm text-white/70">
+      <div className="grid h-[100dvh] w-full place-items-center bg-[#020202] text-sm text-[#E5E7EB]/65">
         טוען את הזירה...
       </div>
     );
@@ -745,43 +746,43 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
 
   return (
     <div
-      className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#050505] font-sans"
+      className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#020202] font-sans"
       dir="rtl"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEndHandler}
       style={{ touchAction: 'pan-y' }}
     >
-      <div className="pointer-events-none fixed inset-x-0 top-6 z-40 flex items-center justify-center">
-        <div className="rounded-full border border-white/10 bg-white/[0.02] px-4 py-1.5 text-[11px] font-black tracking-[0.2em] text-cyan-100 shadow-[0_0_28px_rgba(34,211,238,0.2)] backdrop-blur-2xl">
+      <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex items-center justify-center">
+        <div className="rounded-full border border-white/10 bg-[#111111]/70 px-4 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-[#E5E7EB]/85 backdrop-blur-3xl">
           {labels.title}
         </div>
       </div>
 
-      <div className="pointer-events-none fixed left-0 right-0 top-14 z-40 flex items-center justify-center gap-5">
+      <div className="pointer-events-none fixed left-0 right-0 top-[3.2rem] z-40 flex items-center justify-center gap-2">
         <button
           onClick={() => setFilter('recent')}
-          className={`pointer-events-auto rounded-full border px-4 py-1.5 text-[12px] font-black tracking-[0.12em] backdrop-blur-2xl transition-all ${
+          className={`pointer-events-auto rounded-full border px-4 py-1 text-[11px] font-semibold backdrop-blur-3xl transition-all ${
             filter === 'recent'
-              ? 'border-white/35 bg-white/[0.08] text-white shadow-[0_0_24px_rgba(255,255,255,0.12)]'
-              : 'border-white/10 bg-white/[0.02] text-white/45 hover:text-white/75'
+              ? 'border-white/25 bg-white/10 text-[#E5E7EB]'
+              : 'border-white/10 bg-[#111111]/65 text-[#E5E7EB]/50 hover:text-[#E5E7EB]/75'
           }`}
         >
           {labels.recent}
         </button>
         <button
           onClick={() => setFilter('trending')}
-          className={`pointer-events-auto rounded-full border px-4 py-1.5 text-[12px] font-black tracking-[0.12em] backdrop-blur-2xl transition-all ${
+          className={`pointer-events-auto rounded-full border px-4 py-1 text-[11px] font-semibold backdrop-blur-3xl transition-all ${
             filter === 'trending'
-              ? 'border-cyan-300/40 bg-cyan-300/10 text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.2)]'
-              : 'border-white/10 bg-white/[0.02] text-white/45 hover:text-white/75'
+              ? 'border-[#007AFF]/45 bg-[#007AFF]/15 text-[#E5E7EB]'
+              : 'border-white/10 bg-[#111111]/65 text-[#E5E7EB]/50 hover:text-[#E5E7EB]/75'
           }`}
         >
           {labels.trending}
         </button>
       </div>
 
-      <div ref={containerRef} className="no-scrollbar h-[100dvh] w-full flex-1 snap-y snap-mandatory overflow-y-scroll">
+      <div ref={containerRef} className="hide-scrollbar h-[100dvh] w-full flex-1 snap-y snap-mandatory overflow-y-scroll">
         {assets.map((asset, index) => (
           <AssetCard
             key={`${asset.id}-${index}`}
@@ -800,29 +801,29 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
       <AnimatePresence>
         {showArsenal && (
           <motion.div
-            initial={{ y: 100, opacity: 0, scale: 0.95 }}
+            initial={{ y: 100, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 100, opacity: 0, scale: 0.95 }}
+            exit={{ y: 100, opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', damping: 25, stiffness: 210 }}
-            className="fixed bottom-[132px] left-4 right-4 z-50 flex h-40 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] shadow-[0_24px_60px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
+            className="fixed bottom-[122px] left-4 right-4 z-50 flex h-40 flex-col overflow-hidden rounded-[1.7rem] border border-white/10 bg-[#111111]/88 shadow-[0_24px_60px_rgba(0,0,0,0.78)] backdrop-blur-3xl"
           >
-            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-5 py-3">
-              <span className="flex items-center gap-2 text-xs font-black tracking-widest text-cyan-200">
+            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-5 py-3">
+              <span className="flex items-center gap-2 text-xs font-semibold text-[#E5E7EB]">
                 <Backpack size={14} />
                 {labels.arsenal}
               </span>
               <button
                 onClick={() => setShowArsenal(null)}
-                className="rounded-full border border-white/15 bg-black/40 p-1.5 text-white/60 transition-colors hover:text-white"
+                className="rounded-full border border-white/15 bg-black/35 p-1.5 text-[#E5E7EB]/70 transition-colors hover:text-[#E5E7EB]"
                 aria-label="סגירה"
               >
                 <X size={14} />
               </button>
             </div>
 
-            <div className="no-scrollbar flex flex-1 snap-x items-center gap-3 overflow-x-auto px-5">
+            <div className="hide-scrollbar flex flex-1 snap-x items-center gap-2.5 overflow-x-auto px-4">
               {inventory.length === 0 ? (
-                <div className="w-full text-center text-[10px] font-bold tracking-widest text-white/30">הארסנל ריק</div>
+                <div className="w-full text-center text-[10px] font-semibold text-[#E5E7EB]/35">הארסנל ריק</div>
               ) : (
                 inventory.map((item, idx) => {
                   const power = POWERS_DICT[item.power_id];
@@ -831,17 +832,17 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
                     <motion.button
                       key={item.id}
                       type="button"
-                      initial={{ opacity: 0, x: 20 }}
+                      initial={{ opacity: 0, x: 18 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
+                      transition={{ delay: idx * 0.04 }}
                       onClick={() => void handleUsePower(item.power_id, selectedAsset)}
-                      className="group h-24 w-24 shrink-0 snap-center rounded-2xl border border-white/10 bg-[#121212] transition-all hover:border-cyan-300/40 hover:bg-white/[0.06]"
+                      className="group h-24 w-24 shrink-0 snap-center rounded-2xl border border-white/10 bg-[#0C0C0C]/90 transition-all hover:border-[#007AFF]/35"
                     >
                       <div className="flex h-full flex-col items-center justify-center gap-1.5">
-                        <power.icon size={22} className={`${power.color} ${power.glow} transition-transform group-hover:scale-110`} />
+                        <power.icon size={20} className={`${power.color} transition-transform group-hover:scale-110`} />
                         <div className="text-center">
-                          <h3 className="text-[9px] font-black text-white">{power.name}</h3>
-                          <p className="text-[8px] font-bold text-cyan-300">x{item.quantity}</p>
+                          <h3 className="text-[9px] font-semibold text-[#E5E7EB]">{power.name}</h3>
+                          <p className="text-[9px] font-semibold text-[#E5E7EB]/65">x{item.quantity}</p>
                         </div>
                       </div>
                     </motion.button>
@@ -852,11 +853,6 @@ export default function TheFloor({ refreshKey = 0 }: TheFloorProps) {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}</style>
     </div>
   );
 }
