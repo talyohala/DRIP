@@ -2,47 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .glass-panel {
-    @apply bg-[#050505]/60 backdrop-blur-3xl border border-white/5 border-t-white/10 shadow-2xl;
-  }
-  
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-br from-white via-white/90 to-white/40;
-  }
-  
-  .vip-button {
-    @apply relative overflow-hidden bg-gradient-to-r from-yellow-400 to-yellow-600 text-black font-black tracking-widest uppercase transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(234,179,8,0.2)] hover:shadow-[0_0_30px_rgba(234,179,8,0.4)];
-  }
-
-  .neon-text {
-    @apply drop-shadow-[0_0_8px_rgba(234,179,8,0.8)];
-  }
-}
-
 :root {
-  background-color: #020202;
   color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: #010102;
 }
 
-html, body, #root {
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
   margin: 0;
-  padding: 0;
-  background-color: #020202;
-  color: white;
-  min-height: 100vh;
+  width: 100%;
+  min-height: 100%;
+  background: #000;
+  color: #f8fafc;
+}
+
+body {
+  overflow: hidden;
   -webkit-tap-highlight-color: transparent;
 }
 
 body::before {
   content: '';
   position: fixed;
-  top: -50%; left: -50%; width: 200%; height: 200%;
-  background: 
-    radial-gradient(circle at 50% 50%, rgba(234, 179, 8, 0.03) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.02) 0%, transparent 40%);
-  z-index: -1;
+  inset: -28%;
   pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 22% 24%, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.02) 24%, transparent 42%),
+    radial-gradient(circle at 78% 16%, rgba(34, 211, 238, 0.14) 0%, rgba(34, 211, 238, 0.02) 24%, transparent 42%),
+    radial-gradient(circle at 50% 92%, rgba(244, 63, 94, 0.12) 0%, rgba(244, 63, 94, 0.01) 28%, transparent 48%);
+  filter: blur(28px);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(circle at 50% 40%, black 28%, transparent 78%);
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .hide-scrollbar::-webkit-scrollbar {
