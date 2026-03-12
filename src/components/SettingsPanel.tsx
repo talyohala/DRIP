@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { X } from 'lucide-react';
 
 export type AppPrefs = {
   autoPlay: boolean;
@@ -10,6 +11,7 @@ type SettingsPanelProps = {
   open: boolean;
   prefs: AppPrefs;
   onToggle: (key: keyof AppPrefs) => void;
+  onResetMarket: () => void;
   onClose: () => void;
 };
 
@@ -38,28 +40,37 @@ const Row = ({
   </button>
 );
 
-export default function SettingsPanel({ open, prefs, onToggle, onClose }: SettingsPanelProps) {
+export default function SettingsPanel({ open, prefs, onToggle, onResetMarket, onClose }: SettingsPanelProps) {
   if (!open) return null;
 
   return (
-    <motion.aside
-      className="holo-panel pointer-events-auto absolute inset-x-3 top-20 z-40 mx-auto w-auto max-w-md rounded-3xl p-3 md:inset-x-auto md:right-6 md:top-24 md:w-[360px]"
-      initial={{ opacity: 0, y: -18, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 170, damping: 20 }}
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-semibold text-white">הגדרות</p>
-        <button type="button" onClick={onClose} className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/80">
-          סגור
-        </button>
-      </div>
+    <motion.section className="fixed inset-0 z-[70] bg-[#020313]/95 p-4 backdrop-blur-xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="mx-auto flex h-full w-full max-w-4xl flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">הגדרות</h2>
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/15 p-2 text-white/85">
+            <X size={18} />
+          </button>
+        </div>
 
-      <div className="space-y-2 text-white/90">
-        <Row label="ניגון אוטומטי" value={prefs.autoPlay} onClick={() => onToggle('autoPlay')} />
-        <Row label="לוח מסחר קומפקטי" value={prefs.compactDesk} onClick={() => onToggle('compactDesk')} />
-        <Row label="אפקטים עדינים" value={prefs.lowMotion} onClick={() => onToggle('lowMotion')} />
+        <div className="holo-panel min-h-0 flex-1 overflow-auto rounded-3xl p-4">
+          <div className="space-y-2 text-white/90">
+            <Row label="ניגון אוטומטי" value={prefs.autoPlay} onClick={() => onToggle('autoPlay')} />
+            <Row label="לוח מסחר קומפקטי" value={prefs.compactDesk} onClick={() => onToggle('compactDesk')} />
+            <Row label="אפקטים עדינים" value={prefs.lowMotion} onClick={() => onToggle('lowMotion')} />
+          </div>
+
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={onResetMarket}
+              className="rounded-xl border border-[#FF3B30]/45 bg-[#FF3B30]/15 px-3 py-2 text-xs font-semibold text-[#FFD2CF]"
+            >
+              איפוס שוק
+            </button>
+          </div>
+        </div>
       </div>
-    </motion.aside>
+    </motion.section>
   );
 }

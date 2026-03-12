@@ -1,15 +1,26 @@
 import { motion } from 'framer-motion';
-import { Settings2, ShoppingBag, Upload, UserCircle2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  ChevronDown,
+  FastForward,
+  Menu,
+  Pause,
+  Play,
+  Rewind,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import PowerStore, { type PowerItem } from './PowerStore';
-import ProfilePanel, { type ProfileState } from './ProfilePanel';
+import ProfilePanel, { type ProfileMediaItem, type ProfileState } from './ProfilePanel';
 import SettingsPanel, { type AppPrefs } from './SettingsPanel';
 import StakeDesk, { type AssetDeskModel } from './StakeDesk';
 import UploadPanel, { type MediaKind, type PlatformName, type UploadDraft } from './UploadPanel';
+import WalletPanel from './WalletPanel';
+import { supabase } from '../supabase';
 
 type FoundingLedger = Record<string, number>;
-type DockPanel = 'upload' | 'store' | 'profile' | 'settings' | null;
+type DockPanel = 'upload' | 'store' | 'profile' | 'settings' | 'wallet' | null;
 
 type FeedAsset = AssetDeskModel & {
   summary: string;
@@ -24,11 +35,16 @@ type FeedAsset = AssetDeskModel & {
   claimVolume: number;
   watchMinutes: number;
   createdAt: number;
+  uploaderCountry: string;
+  uploaderId: string;
 };
 
 const USER_ID = 'local-player';
 const BASE_BACK_COST = 10;
 const DIVIDEND_RATE = 0.1;
+const MEDIA_BUCKET = import.meta.env.VITE_SUPABASE_MEDIA_BUCKET ?? 'drip_media';
+const ASSETS_BUCKET = import.meta.env.VITE_SUPABASE_ASSETS_BUCKET ?? 'drip_assets';
+
 const PALETTES: Array<[string, string]> = [
   ['#4B0CA3', '#FF007F'],
   ['#10002B', '#CCFF00'],
@@ -37,10 +53,73 @@ const PALETTES: Array<[string, string]> = [
   ['#03071E', '#CCFF00'],
 ];
 
-const powerItems: PowerItem[] = [
-  { id: 'neon-burst', name: 'פולס ניאון', price: 140, effect: 'דחיפת מחיר וצפיות' },
-  { id: 'tribe-rush', name: 'גל סינדיקט', price: 240, effect: 'תוספת השתלטויות' },
-  { id: 'market-lift', name: 'הרמת רצפה', price: 320, effect: 'חיזוק מחיר פתיחה' },
+const POWER_NAMES = [
+  'פולס ניאון',
+  'גל סינדיקט',
+  'הרמת רצפה',
+  'פריצה ויראלית',
+  'הדף שיתוף',
+  'הכפלת חשיפה',
+  'האצת טרנד',
+  'הזרמת קונים',
+  'נעילת מומנטום',
+  'אפקט פרפר',
+  'חסימת מתחרים',
+  'זינוק מדד',
+  'שיגור לייב',
+  'חדירת פיד',
+  'האצת צפייה',
+  'טריגר קהילה',
+  'בועת פומו',
+  'קפיצת מחיר',
+  'ריכוז הייפ',
+  'הדלקת קהל',
+  'מכפיל מדיה',
+  'גל קונים',
+  'אחיזת שוק',
+  'חדות מותג',
+];
+
+const REWARD_NAMES = [
+  'תיבת יהלום',
+  'תיבת פלזמה',
+  'תיבת כספית',
+  'בונוס יומי',
+  'מענק קהילה',
+  'פרס גלישה',
+  'קאשבק מהיר',
+  'ניצוץ מטבעות',
+  'גשם DRIPCOIN',
+  'מזל שוק',
+  'בוסט ארנק',
+  'רווח פתע',
+  'קפסולת רווח',
+  'פרס מייסדים',
+  'פרס טרנד',
+  'מענק תבע',
+  'מענק גבה',
+  'פרס דרגה',
+  'בונוס לילה',
+  'בונוס השקה',
+];
+
+const storeItems: PowerItem[] = [
+  ...POWER_NAMES.map((name, index) => ({
+    id: `power-${index + 1}`,
+    name,
+    effect: 'השפעה ישירה על הנכס הפעיל',
+    price: 90 + index * 26,
+    kind: 'power' as const,
+    tier: index < 4 ? 'S' : index < 10 ? 'A' : index < 18 ? 'B' : 'C',
+  })),
+  ...REWARD_NAMES.map((name, index) => ({
+    id: `reward-${index + 1}`,
+    name,
+    effect: 'רווחים לארנק ברגע איסוף',
+    price: 80 + index * 22,
+    kind: 'reward' as const,
+    tier: index < 3 ? 'S' : index < 8 ? 'A' : index < 14 ? 'B' : 'C',
+  })),
 ];
 
 const seedAssets: FeedAsset[] = [
@@ -51,14 +130,14 @@ const seedAssets: FeedAsset[] = [
     summary: 'פריים חי עם תאורה נוזלית',
     mediaKind: 'video',
     mediaUrl: 'https://cdn.coverr.co/videos/coverr-aerial-view-of-a-city-1579/1080p.mp4',
-    sourceLink: undefined,
     platform: 'קישור',
+    sourceLink: undefined,
     paletteA: '#4B0CA3',
     paletteB: '#FF007F',
     openingPrice: 520,
     stakePrice: 520,
     viewersLive: 1830,
-    hypeLevel: 0.4,
+    hypeLevel: 0.42,
     foundingPool: 0,
     foundingBackers: 0,
     totalClaims: 4,
@@ -73,6 +152,8 @@ const seedAssets: FeedAsset[] = [
     claimVolume: 2440,
     watchMinutes: 6400,
     createdAt: Date.now() - 1000 * 60 * 180,
+    uploaderCountry: 'ישראל',
+    uploaderId: 'seed-creator',
   },
   {
     id: 'pulse-2',
@@ -82,8 +163,8 @@ const seedAssets: FeedAsset[] = [
     mediaKind: 'image',
     mediaUrl:
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80',
-    sourceLink: undefined,
     platform: 'קישור',
+    sourceLink: undefined,
     paletteA: '#10002B',
     paletteB: '#CCFF00',
     openingPrice: 890,
@@ -104,6 +185,8 @@ const seedAssets: FeedAsset[] = [
     claimVolume: 7875,
     watchMinutes: 9200,
     createdAt: Date.now() - 1000 * 60 * 140,
+    uploaderCountry: 'צרפת',
+    uploaderId: 'seed-creator',
   },
   {
     id: 'pulse-3',
@@ -112,8 +195,8 @@ const seedAssets: FeedAsset[] = [
     summary: 'טיפוגרפיה קינטית בלופ',
     mediaKind: 'video',
     mediaUrl: 'https://cdn.coverr.co/videos/coverr-fashion-model-in-neon-light-9710/1080p.mp4',
-    sourceLink: undefined,
     platform: 'קישור',
+    sourceLink: undefined,
     paletteA: '#010114',
     paletteB: '#E0E0E0',
     openingPrice: 1330,
@@ -134,6 +217,8 @@ const seedAssets: FeedAsset[] = [
     claimVolume: 19492,
     watchMinutes: 15300,
     createdAt: Date.now() - 1000 * 60 * 110,
+    uploaderCountry: 'ברזיל',
+    uploaderId: 'seed-creator',
   },
 ];
 
@@ -187,53 +272,56 @@ const createAssetId = (): string => {
   return `pulse-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 };
 
+const sanitizeFileName = (name: string): string => name.replace(/[^a-zA-Z0-9._-]+/g, '-').toLowerCase();
 const pickPalette = (): [string, string] => PALETTES[Math.floor(Math.random() * PALETTES.length)];
 
-const DockButton = ({
-  label,
-  active,
-  onClick,
-  children,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`holo-panel flex items-center gap-2 rounded-2xl px-3 py-2 text-xs ${active ? 'text-[#CCFF00]' : 'text-white/85'}`}
-  >
-    {children}
-    <span>{label}</span>
-  </button>
-);
+const uploadFileToBucket = async (bucket: string, folder: string, file: File): Promise<string> => {
+  const path = `${folder}/${Date.now()}-${sanitizeFileName(file.name)}`;
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+    upsert: false,
+    contentType: file.type || undefined,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
+};
 
 export default function AetherFeed() {
   const [assets, setAssets] = useState<FeedAsset[]>(() => seedAssets.map((asset) => normalizeAsset(asset)));
   const [activeIndex, setActiveIndex] = useState(0);
   const [wallet, setWallet] = useState(4800);
+  const [pendingProfits, setPendingProfits] = useState(0);
   const [lifetimeDividends, setLifetimeDividends] = useState(0);
   const [shockwaveAirdrops, setShockwaveAirdrops] = useState(0);
   const [myClaims, setMyClaims] = useState(0);
-  const [myBacks, setMyBacks] = useState(0);
   const [eventLine, setEventLine] = useState('גללו. תבעו. הגבּו.');
   const [deskCollapsed, setDeskCollapsed] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState<DockPanel>(null);
+  const [inventory, setInventory] = useState<Record<string, number>>({});
   const [profile, setProfile] = useState<ProfileState>({
-    displayName: 'משתמש/ת חדש/ה',
+    displayName: 'משתמש',
     house: 'בית חופשי',
     tagline: 'על הטרנד הבא',
+    country: 'ישראל',
+    bio: '',
+    avatarUrl: '',
   });
   const [prefs, setPrefs] = useState<AppPrefs>({
     autoPlay: true,
     compactDesk: true,
     lowMotion: false,
   });
+  const [uploadedAssetIds, setUploadedAssetIds] = useState<string[]>([]);
+  const [claimedAssetIds, setClaimedAssetIds] = useState<string[]>([]);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
 
-  const objectUrlsRef = useRef<string[]>([]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const objectUrlsRef = useRef<string[]>([]);
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
 
   useEffect(() => {
     return () => {
@@ -270,7 +358,7 @@ export default function AetherFeed() {
   useEffect(() => {
     setAssets((prevAssets) =>
       prevAssets.map((asset, idx) => {
-        const migration = idx === activeIndex ? 220 : -58;
+        const migration = idx === activeIndex ? 230 : -60;
         const viewersLive = clamp(asset.viewersLive + migration, 220, 60000);
         return normalizeAsset({ ...asset, viewersLive });
       }),
@@ -279,7 +367,7 @@ export default function AetherFeed() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      let liveHeadline = '';
+      let headline = '';
       setAssets((prevAssets) =>
         prevAssets.map((asset, idx) => {
           const isActive = idx === activeIndex;
@@ -309,7 +397,7 @@ export default function AetherFeed() {
             stakePrice = clamp(Math.round(autoClaimPrice * (1.03 + Math.random() * 0.07)), 60, 500000);
             currentOwner = `סינדיקט ${1 + Math.floor(Math.random() * 7)}`;
             shareCount += Math.round(10 + Math.random() * 36);
-            if (isActive) liveHeadline = `השתלטות ${formatCoin(autoClaimPrice)} DRIPCOIN`;
+            if (isActive) headline = `השתלטות ${formatCoin(autoClaimPrice)} DRIPCOIN`;
           }
 
           return normalizeAsset({
@@ -325,7 +413,7 @@ export default function AetherFeed() {
           });
         }),
       );
-      if (liveHeadline) setEventLine(liveHeadline);
+      if (headline) setEventLine(headline);
     }, prefs.lowMotion ? 3200 : 2400);
 
     return () => window.clearInterval(interval);
@@ -342,6 +430,87 @@ export default function AetherFeed() {
   const canBack = wallet >= backCost;
   const canClaim = wallet >= (activeAsset?.stakePrice ?? Number.MAX_SAFE_INTEGER);
 
+  const uploadedMedia = useMemo<ProfileMediaItem[]>(
+    () =>
+      assets
+        .filter((asset) => uploadedAssetIds.includes(asset.id))
+        .map((asset) => ({
+          id: asset.id,
+          title: asset.title,
+          mediaUrl: asset.mediaUrl,
+          country: asset.uploaderCountry,
+          mediaKind: asset.mediaKind,
+        })),
+    [assets, uploadedAssetIds],
+  );
+
+  const claimedMedia = useMemo<ProfileMediaItem[]>(
+    () =>
+      assets
+        .filter((asset) => claimedAssetIds.includes(asset.id))
+        .map((asset) => ({
+          id: asset.id,
+          title: asset.title,
+          mediaUrl: asset.mediaUrl,
+          country: asset.uploaderCountry,
+          mediaKind: asset.mediaKind,
+        })),
+    [assets, claimedAssetIds],
+  );
+
+  const activeVideo = activeAsset?.mediaKind === 'video' ? videoRefs.current[activeAsset.id] : null;
+
+  useEffect(() => {
+    const id = activeAsset?.id;
+    Object.entries(videoRefs.current).forEach(([assetId, video]) => {
+      if (!video) return;
+      if (assetId !== id) {
+        video.pause();
+        return;
+      }
+      video.muted = isMuted;
+      if (activeAsset?.mediaKind !== 'video') return;
+      if (!prefs.autoPlay && !isPlaying) {
+        video.pause();
+        return;
+      }
+      if (isPlaying || prefs.autoPlay) {
+        void video.play().catch(() => {
+          video.muted = true;
+          setIsMuted(true);
+          void video.play().catch(() => undefined);
+        });
+      } else {
+        video.pause();
+      }
+    });
+  }, [activeAsset?.id, activeAsset?.mediaKind, isMuted, isPlaying, prefs.autoPlay]);
+
+  useEffect(() => {
+    const video = activeVideo;
+    if (!video) {
+      setVideoProgress(0);
+      setVideoDuration(0);
+      return;
+    }
+    const onTime = () => {
+      setVideoProgress(video.currentTime || 0);
+      setVideoDuration(video.duration || 0);
+      setIsPlaying(!video.paused);
+    };
+    onTime();
+    video.addEventListener('timeupdate', onTime);
+    video.addEventListener('durationchange', onTime);
+    video.addEventListener('play', onTime);
+    video.addEventListener('pause', onTime);
+    return () => {
+      video.removeEventListener('timeupdate', onTime);
+      video.removeEventListener('durationchange', onTime);
+      video.removeEventListener('play', onTime);
+      video.removeEventListener('pause', onTime);
+    };
+  }, [activeVideo, activeAsset?.id]);
+
   const updateShimmer = (clientX: number, clientY: number) => {
     const root = scrollRef.current;
     if (!root) return;
@@ -352,36 +521,61 @@ export default function AetherFeed() {
     root.style.setProperty('--my', `${clamp(y, 0, 100)}%`);
   };
 
-  const createObjectUrl = (file: File): string => {
+  const toLocalObjectUrl = (file: File): string => {
     const url = URL.createObjectURL(file);
     objectUrlsRef.current.push(url);
     return url;
   };
 
-  const onUploadSubmit = (draft: UploadDraft) => {
+  const openPanel = (panel: DockPanel) => {
+    setPanelOpen(panel);
+    setMenuOpen(false);
+  };
+
+  const closePanel = () => setPanelOpen(null);
+
+  const onUploadSubmit = async (draft: UploadDraft) => {
     const [paletteA, paletteB] = pickPalette();
+    let mediaUrl = draft.mediaUrl;
+    let mediaKind = draft.mediaKind;
+    let platform = draft.platform;
+    let sourceLink = draft.sourceLink;
+
+    if (draft.file) {
+      mediaKind = draft.file.type.startsWith('video/') ? 'video' : 'image';
+      platform = 'גלריה';
+      sourceLink = undefined;
+      try {
+        mediaUrl = await uploadFileToBucket(MEDIA_BUCKET, 'uploads', draft.file);
+      } catch {
+        mediaUrl = toLocalObjectUrl(draft.file);
+        toast.error('העלאה לשרת נכשלה. נשמר מקומי');
+      }
+    }
+
+    const id = createAssetId();
     const created = normalizeAsset({
-      id: createAssetId(),
+      id,
       title: draft.title,
       creator: draft.creator,
       summary: draft.summary,
-      mediaKind: draft.mediaKind,
-      mediaUrl: draft.mediaUrl,
-      sourceLink: draft.sourceLink,
-      platform: draft.platform,
+      mediaKind,
+      mediaUrl,
+      sourceLink,
+      platform,
       paletteA,
       paletteB,
       openingPrice: draft.openingPrice,
       stakePrice: draft.openingPrice,
-      viewersLive: 220 + Math.round(Math.random() * 450),
-      hypeLevel: 0.11,
+      viewersLive: 240 + Math.round(Math.random() * 500),
+      hypeLevel: 0.12,
       foundingPool: 0,
       foundingBackers: 0,
       totalClaims: 0,
       averageClaimPrice: draft.openingPrice,
-      viralScore: 6,
+      viralScore: 8,
       transferVelocity: 0,
-      marketingScore: 9,
+      marketingScore: 10,
       currentOwner: 'היוצר המקורי',
       trendScore: 1,
       foundingLedger: {},
@@ -389,14 +583,29 @@ export default function AetherFeed() {
       claimVolume: 0,
       watchMinutes: 0,
       createdAt: Date.now(),
+      uploaderCountry: profile.country,
+      uploaderId: USER_ID,
     });
 
     setAssets((prev) => [created, ...prev]);
+    setUploadedAssetIds((prev) => [id, ...prev.filter((item) => item !== id)]);
     setActiveIndex(0);
-    setPanelOpen(null);
+    closePanel();
     setEventLine(`הנפקה ${formatCoin(draft.openingPrice)} DRIPCOIN`);
     toast.success('נכס חדש בפיד');
     scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const onUploadAvatar = async (file: File) => {
+    try {
+      const avatarUrl = await uploadFileToBucket(ASSETS_BUCKET, 'avatars', file);
+      setProfile((prev) => ({ ...prev, avatarUrl }));
+      toast.success('תמונת פרופיל עודכנה');
+    } catch {
+      const localUrl = toLocalObjectUrl(file);
+      setProfile((prev) => ({ ...prev, avatarUrl: localUrl }));
+      toast.error('העלאה לשרת נכשלה. נשמר מקומי');
+    }
   };
 
   const onBack = () => {
@@ -409,7 +618,6 @@ export default function AetherFeed() {
     }
 
     setWallet((prev) => prev - actionCost);
-    setMyBacks((prev) => prev + 1);
     setAssets((prevAssets) =>
       prevAssets.map((item, idx) => {
         if (idx !== activeIndex) return item;
@@ -449,11 +657,15 @@ export default function AetherFeed() {
     const dividendPool = Math.round(claimPrice * DIVIDEND_RATE);
     const myDividend = totalLedger > 0 ? Math.round(dividendPool * (myStake / totalLedger)) : 0;
     const shockwave = Math.round(asset.viewersLive * (0.011 + asset.viralScore / 10000));
+    const profitPack = myDividend + shockwave;
 
-    setWallet((prev) => prev - claimPrice + myDividend + shockwave);
+    setWallet((prev) => prev - claimPrice);
+    setPendingProfits((prev) => prev + profitPack);
     setLifetimeDividends((prev) => prev + myDividend);
     setShockwaveAirdrops((prev) => prev + shockwave);
     setMyClaims((prev) => prev + 1);
+    setClaimedAssetIds((prev) => [asset.id, ...prev.filter((id) => id !== asset.id)]);
+
     setAssets((prevAssets) =>
       prevAssets.map((item, idx) => {
         if (idx !== activeIndex) return item;
@@ -480,60 +692,93 @@ export default function AetherFeed() {
       }),
     );
 
-    setEventLine(`תבע ${formatCoin(claimPrice)} · החזר ${formatCoin(myDividend + shockwave)}`);
+    setEventLine(`תבע ${formatCoin(claimPrice)} · לרווח ${formatCoin(profitPack)}`);
   };
 
-  const onBuyPower = (powerId: string) => {
+  const onBuyStoreItem = (id: string) => {
     const asset = assets[activeIndex];
-    const power = powerItems.find((item) => item.id === powerId);
-    if (!asset || !power) return;
-    if (wallet < power.price) {
+    const item = storeItems.find((entry) => entry.id === id);
+    if (!asset || !item) return;
+    if (wallet < item.price) {
       toast.error('יתרה נמוכה');
       return;
     }
 
-    setWallet((prev) => prev - power.price);
+    setWallet((prev) => prev - item.price);
+    setInventory((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+
+    if (item.kind === 'reward') {
+      const rewardBoost = item.tier === 'S' ? 2.5 : item.tier === 'A' ? 2 : item.tier === 'B' ? 1.7 : 1.35;
+      const reward = Math.round(item.price * rewardBoost);
+      setPendingProfits((prev) => prev + reward);
+      setEventLine(`פרס ${item.name} · ${formatCoin(reward)} DRIPCOIN`);
+      setPanelOpen(null);
+      return;
+    }
+
+    const powerBoost = item.tier === 'S' ? 1.14 : item.tier === 'A' ? 1.1 : item.tier === 'B' ? 1.07 : 1.05;
+    const viewerBoost = item.tier === 'S' ? 880 : item.tier === 'A' ? 640 : item.tier === 'B' ? 470 : 320;
+    const shareBoost = item.tier === 'S' ? 180 : item.tier === 'A' ? 130 : item.tier === 'B' ? 90 : 65;
+    const claimBoost = item.tier === 'S' ? 3 : item.tier === 'A' ? 2 : 1;
+
     setAssets((prevAssets) =>
-      prevAssets.map((item, idx) => {
-        if (idx !== activeIndex) return item;
-
-        if (powerId === 'neon-burst') {
-          return normalizeAsset({
-            ...item,
-            stakePrice: Math.round(item.stakePrice * 1.08),
-            viewersLive: clamp(item.viewersLive + 650, 180, 60000),
-            shareCount: item.shareCount + 120,
-            watchMinutes: item.watchMinutes + 440,
-          });
-        }
-
-        if (powerId === 'tribe-rush') {
-          const boostClaims = 2;
-          const claimVolume = item.claimVolume + item.stakePrice * boostClaims;
-          const totalClaims = item.totalClaims + boostClaims;
-          return normalizeAsset({
-            ...item,
-            totalClaims,
-            claimVolume,
-            averageClaimPrice: claimVolume / totalClaims,
-            viewersLive: clamp(item.viewersLive + 520, 180, 60000),
-            shareCount: item.shareCount + 80,
-            currentOwner: profile.house || profile.displayName,
-          });
-        }
-
+      prevAssets.map((entry, idx) => {
+        if (idx !== activeIndex) return entry;
+        const totalClaims = entry.totalClaims + claimBoost;
+        const claimVolume = entry.claimVolume + Math.round(entry.stakePrice * claimBoost);
         return normalizeAsset({
-          ...item,
-          openingPrice: Math.round(Math.max(item.openingPrice, item.stakePrice * 0.92)),
-          stakePrice: Math.round(item.stakePrice * 1.05),
-          watchMinutes: item.watchMinutes + 280,
-          shareCount: item.shareCount + 60,
+          ...entry,
+          stakePrice: Math.round(entry.stakePrice * powerBoost),
+          viewersLive: clamp(entry.viewersLive + viewerBoost, 180, 60000),
+          shareCount: entry.shareCount + shareBoost,
+          watchMinutes: entry.watchMinutes + Math.round(viewerBoost * 0.7),
+          totalClaims,
+          claimVolume,
+          averageClaimPrice: claimVolume / totalClaims,
+          currentOwner: profile.house || profile.displayName,
         });
       }),
     );
-
-    setEventLine(`כוח הופעל ${power.name}`);
+    setEventLine(`כוח ${item.name} הופעל`);
     setPanelOpen(null);
+  };
+
+  const onCollectProfits = () => {
+    if (pendingProfits <= 0) {
+      toast.error('אין רווחים לאיסוף');
+      return;
+    }
+    setWallet((prev) => prev + pendingProfits);
+    setEventLine(`נאספו ${formatCoin(pendingProfits)} DRIPCOIN`);
+    setPendingProfits(0);
+  };
+
+  const onResetMarket = () => {
+    setAssets(seedAssets.map((asset) => normalizeAsset(asset)));
+    setActiveIndex(0);
+    setEventLine('השוק אופס');
+    closePanel();
+  };
+
+  const togglePlay = () => {
+    const video = activeVideo;
+    if (!video) return;
+    if (video.paused) {
+      void video.play().catch(() => undefined);
+      setIsPlaying(true);
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const seekBy = (seconds: number) => {
+    const video = activeVideo;
+    if (!video) return;
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const nextTime = clamp(video.currentTime + seconds, 0, duration || video.currentTime + seconds);
+    video.currentTime = nextTime;
+    setVideoProgress(nextTime);
   };
 
   return (
@@ -545,48 +790,97 @@ export default function AetherFeed() {
         if (touch) updateShimmer(touch.clientX, touch.clientY);
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 p-3">
-        <div className="pointer-events-auto mx-auto flex max-w-4xl items-center justify-between gap-2">
-          <div className="holo-panel rounded-2xl px-3 py-1.5 text-xs text-white/85">
-            {profile.displayName} · {formatCoin(wallet)} DRIPCOIN
+      {menuOpen && panelOpen === null && <button type="button" aria-label="close menu" className="fixed inset-0 z-50" onClick={() => setMenuOpen(false)} />}
+
+      <div className="pointer-events-none absolute left-3 top-3 z-[60]">
+        <div className="pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="holo-panel flex items-center gap-2 rounded-2xl px-3 py-2 text-xs text-white"
+          >
+            <Menu size={16} />
+            פעולות
+            <ChevronDown size={14} />
+          </button>
+
+          {menuOpen && (
+            <div className="holo-panel mt-2 w-44 rounded-2xl p-1.5 text-xs">
+              {[
+                ['upload', 'העלאה'],
+                ['store', 'חנות'],
+                ['profile', 'פרופיל'],
+                ['wallet', 'ארנק'],
+                ['settings', 'הגדרות'],
+              ].map(([panel, label]) => (
+                <button
+                  key={panel}
+                  type="button"
+                  onClick={() => openPanel(panel as DockPanel)}
+                  className="mb-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-right text-white/90 last:mb-0"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="pointer-events-none absolute right-3 top-3 z-[60]">
+        <div className="pointer-events-auto flex items-center gap-2">
+          <div className="holo-panel rounded-2xl px-3 py-1.5 text-xs text-white/90">
+            יתרה {formatCoin(wallet)} DRIPCOIN
           </div>
-          <div className="holo-panel rounded-2xl px-3 py-1.5 text-xs text-white/80">{eventLine}</div>
+          <div className="holo-panel rounded-2xl px-3 py-1.5 text-xs text-[#CCFF00]">
+            לאיסוף {formatCoin(pendingProfits)} DRIPCOIN
+          </div>
+          <button
+            type="button"
+            onClick={onCollectProfits}
+            className="rounded-2xl border border-[#CCFF00]/40 bg-[#CCFF00]/18 px-3 py-1.5 text-xs font-semibold text-[#E8FF9A]"
+          >
+            איסוף
+          </button>
         </div>
       </div>
 
-      <div className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2">
-        <div className="pointer-events-auto flex flex-col gap-2">
-          <DockButton label="העלאה" active={panelOpen === 'upload'} onClick={() => setPanelOpen(panelOpen === 'upload' ? null : 'upload')}>
-            <Upload size={14} />
-          </DockButton>
-          <DockButton label="חנות" active={panelOpen === 'store'} onClick={() => setPanelOpen(panelOpen === 'store' ? null : 'store')}>
-            <ShoppingBag size={14} />
-          </DockButton>
-          <DockButton label="פרופיל" active={panelOpen === 'profile'} onClick={() => setPanelOpen(panelOpen === 'profile' ? null : 'profile')}>
-            <UserCircle2 size={14} />
-          </DockButton>
-          <DockButton label="הגדרות" active={panelOpen === 'settings'} onClick={() => setPanelOpen(panelOpen === 'settings' ? null : 'settings')}>
-            <Settings2 size={14} />
-          </DockButton>
-        </div>
-      </div>
-
-      <UploadPanel open={panelOpen === 'upload'} onClose={() => setPanelOpen(null)} onSubmit={onUploadSubmit} onCreateObjectUrl={createObjectUrl} />
-      <PowerStore open={panelOpen === 'store'} wallet={wallet} powers={powerItems} onBuy={onBuyPower} onClose={() => setPanelOpen(null)} />
+      <UploadPanel open={panelOpen === 'upload'} onClose={closePanel} onSubmit={onUploadSubmit} />
+      <PowerStore
+        open={panelOpen === 'store'}
+        wallet={wallet}
+        powers={storeItems}
+        inventory={inventory}
+        onBuy={onBuyStoreItem}
+        onClose={closePanel}
+      />
       <ProfilePanel
         open={panelOpen === 'profile'}
         wallet={wallet}
-        assetsOwned={myBacks}
+        assetsOwned={uploadedMedia.length}
         claims={myClaims}
         profile={profile}
+        uploaded={uploadedMedia}
+        claimed={claimedMedia}
         onChange={setProfile}
-        onClose={() => setPanelOpen(null)}
+        onUploadAvatar={onUploadAvatar}
+        onClose={closePanel}
+      />
+      <WalletPanel
+        open={panelOpen === 'wallet'}
+        balance={wallet}
+        pending={pendingProfits}
+        lifetimeDividends={lifetimeDividends}
+        shockwaveAirdrops={shockwaveAirdrops}
+        onCollect={onCollectProfits}
+        onClose={closePanel}
       />
       <SettingsPanel
         open={panelOpen === 'settings'}
         prefs={prefs}
         onToggle={(key) => setPrefs((prev) => ({ ...prev, [key]: !prev[key] }))}
-        onClose={() => setPanelOpen(null)}
+        onResetMarket={onResetMarket}
+        onClose={closePanel}
       />
 
       <div ref={scrollRef} className="aether-scroll">
@@ -595,13 +889,18 @@ export default function AetherFeed() {
             <div className="absolute inset-0">
               {asset.mediaKind === 'video' && (
                 <video
+                  ref={(node) => {
+                    videoRefs.current[asset.id] = node;
+                  }}
                   className="h-full w-full object-cover"
                   src={asset.mediaUrl}
-                  muted
                   loop
                   playsInline
-                  autoPlay={prefs.autoPlay && activeIndex === index}
                   preload="metadata"
+                  muted={isMuted}
+                  onClick={() => {
+                    if (index === activeIndex) togglePlay();
+                  }}
                 />
               )}
               {asset.mediaKind === 'image' && <img src={asset.mediaUrl} alt={asset.title} className="h-full w-full object-cover" />}
@@ -637,7 +936,7 @@ export default function AetherFeed() {
                 </div>
               </div>
 
-              <div className="mx-auto mb-40 w-full max-w-5xl">
+              <div className="mx-auto mb-36 w-full max-w-5xl">
                 <div className="holo-panel w-fit rounded-3xl p-4 md:p-5">
                   <h1
                     className="kinetic-text text-2xl font-semibold text-white md:text-5xl"
@@ -646,7 +945,9 @@ export default function AetherFeed() {
                     {asset.title}
                   </h1>
                   <p className="mt-2 text-sm text-[#E0E0E0]/80 md:text-base">{asset.summary}</p>
-                  <p className="mt-1 text-xs text-[#E0E0E0]/65">{asset.creator}</p>
+                  <p className="mt-1 text-xs text-[#E0E0E0]/65">
+                    {asset.creator} · {asset.uploaderCountry}
+                  </p>
                   {asset.sourceLink && (
                     <a
                       href={asset.sourceLink}
@@ -664,8 +965,42 @@ export default function AetherFeed() {
         ))}
       </div>
 
+      {activeAsset?.mediaKind === 'video' && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-32 z-[55] px-3">
+          <div className="pointer-events-auto mx-auto flex w-full max-w-lg items-center gap-2 rounded-full border border-white/15 bg-black/45 px-3 py-2 backdrop-blur-xl">
+            <button type="button" onClick={() => setIsMuted((prev) => !prev)} className="rounded-full border border-white/20 p-1.5 text-white">
+              {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            </button>
+            <button type="button" onClick={() => seekBy(-10)} className="rounded-full border border-white/20 p-1.5 text-white">
+              <Rewind size={14} />
+            </button>
+            <button type="button" onClick={togglePlay} className="rounded-full border border-white/20 p-1.5 text-white">
+              {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+            </button>
+            <button type="button" onClick={() => seekBy(10)} className="rounded-full border border-white/20 p-1.5 text-white">
+              <FastForward size={14} />
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(1, videoDuration)}
+              step={0.1}
+              value={Math.min(videoProgress, Math.max(1, videoDuration))}
+              onChange={(event) => {
+                const video = activeVideo;
+                if (!video) return;
+                const value = Number(event.target.value);
+                video.currentTime = value;
+                setVideoProgress(value);
+              }}
+              className="w-full accent-[#CCFF00]"
+            />
+          </div>
+        </div>
+      )}
+
       {activeAsset && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-3 pb-4 md:p-6">
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[56] px-3">
           <StakeDesk
             asset={activeAsset}
             wallet={wallet}
@@ -679,13 +1014,12 @@ export default function AetherFeed() {
             collapsed={deskCollapsed}
             onToggleCollapse={() => setDeskCollapsed((prev) => !prev)}
           />
-
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-[#E0E0E0]/80 backdrop-blur-xl">
-            <p>דיבידנד {formatCoin(lifetimeDividends)} DRIPCOIN</p>
-            <p>אייר-דרופ {formatCoin(shockwaveAirdrops)} DRIPCOIN</p>
-          </div>
         </div>
       )}
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[52] px-3 pb-1">
+        <div className="mx-auto w-full max-w-xl text-center text-[11px] text-white/70">{eventLine}</div>
+      </div>
     </section>
   );
 }
