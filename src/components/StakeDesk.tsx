@@ -42,7 +42,10 @@ export default function StakeDesk({
   wallet,
   myFoundingStake,
   myProjectedDividend,
+  onBack,
   onClaim,
+  backCost,
+  canBack,
   canClaim,
 }: StakeDeskProps) {
   const dynamicWeight = 500 + Math.round(asset.hypeLevel * 350);
@@ -74,7 +77,7 @@ export default function StakeDesk({
             </p>
             <div className="mt-1.5 flex items-center gap-2">
               <span className="text-[11px] text-[#CCFF00]">
-                Hype {hypePercent}% · {hypeState}
+                הייפ {hypePercent}% · {hypeState}
               </span>
               <div className="h-1.5 w-24 overflow-hidden rounded-full border border-white/10 bg-black/20">
                 <div className="h-full bg-[#CCFF00]/75" style={{ width: `${hypePercent}%` }} />
@@ -91,13 +94,23 @@ export default function StakeDesk({
           </div>
           <motion.button
             type="button"
+            onClick={onBack}
+            disabled={!canBack}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+            className="rounded-2xl border border-[#FF007F]/40 bg-[#FF007F]/20 px-3 py-3 text-xs font-semibold text-[#FFD3EA] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            גיבוי
+          </motion.button>
+          <motion.button
+            type="button"
             onClick={onClaim}
             disabled={!canClaim}
             whileTap={{ scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 300, damping: 18 }}
             className="rounded-2xl border border-[#CCFF00]/45 bg-[#CCFF00]/18 px-4 py-3 text-sm font-semibold text-[#E8FF9A] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            תבע (Claim)
+            השתלטות
           </motion.button>
         </div>
       </div>
@@ -105,6 +118,7 @@ export default function StakeDesk({
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#E0E0E0]/68">
         <p>תרומה מייסדת: {formatCoin(myFoundingStake)}</p>
         <p>דיבידנד חזוי: {formatCoin(myProjectedDividend)}</p>
+        <p>עלות גיבוי: {formatCoin(backCost)} DRIPCOIN</p>
         <p>תביעות: {asset.totalClaims}</p>
         <p>צופים: {formatCoin(asset.viewersLive)}</p>
       </div>

@@ -18,21 +18,6 @@ const resources = {
       unsupported: 'שפה לא נתמכת',
     },
   },
-  en: {
-    translation: {
-      appName: 'PULSE',
-      feedTitle: 'Aether-Flux Feed',
-      back: 'Back',
-      claim: 'Claim',
-      stakePrice: 'Stake Price',
-      wallet: 'Balance',
-      founders: 'Founders',
-      dividendPool: 'Dividend Pool',
-      viewers: 'Live Viewers',
-      viralVelocity: 'Viral Velocity',
-      unsupported: 'Unsupported language',
-    },
-  },
 } as const;
 
 void i18n
@@ -40,7 +25,7 @@ void i18n
   .use(initReactI18next)
   .init({
     resources,
-    supportedLngs: ['he', 'en'],
+    supportedLngs: ['he'],
     nonExplicitSupportedLngs: true,
     fallbackLng: 'he',
     lng: 'he',
